@@ -1,0 +1,29 @@
+# Go
+*.exe
+*.test
+*.out
+/bin/
+/dist/
+/vendor/
+coverage.out
+coverage.html
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Env / secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Docker / local infra
+docker-compose.override.yml
+
+# Local agent state
+.claude/
+.cursor/
+.windsurf/
