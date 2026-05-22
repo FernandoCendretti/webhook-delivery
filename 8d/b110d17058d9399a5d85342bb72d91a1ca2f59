@@ -1,0 +1,98 @@
+specs/002-signature-idempotency/spec.md
+  s_23b6c2bebf5378::t_2bff52c5aaa421 142-143,147
+  s_23b6c2bebf5378::t_e1077fcedf3479 240-242
+  s_23b6c2bebf5378::t_d6331c62da0dad 295-297
+  s_23b6c2bebf5378::t_0845ed3d81b855 19-21
+  s_23b6c2bebf5378::t_9894a82611a23e 169-175
+  s_23b6c2bebf5378::t_139a6bcb25265f 302-304
+  s_23b6c2bebf5378::t_37e3347bf24e57 293-294
+  s_23b6c2bebf5378::t_0714c913ac16a0 273-275
+  s_23b6c2bebf5378::t_6d390e9e1bab84 317-318,329,334-337
+  s_23b6c2bebf5378::t_433374aa84c501 330-331
+  s_23b6c2bebf5378::t_43464381eb0895 251-252
+  s_23b6c2bebf5378::t_0d105b9ba901d3 8,95-98,109,126,129-134,152-153,163-164,244-245,332-333,343-344
+  s_23b6c2bebf5378::t_97bdc8c328e54c 230-233
+  s_23b6c2bebf5378::t_0b50edf4293b0b 299-301
+  s_23b6c2bebf5378::t_b0d3bacffa5079 319-321
+  s_23b6c2bebf5378::t_c10b567665dff5 84,89-92,94
+  s_23b6c2bebf5378::t_531501c497e621 247-248
+  s_23b6c2bebf5378::t_ed1c3bef1d1f57 1-7,9-17,22-23,32-35,38-39,42,46-53,56-69,71-83,93,104-108,115-119,122-125,135-136,141,148-151,156-157,161-162,176,216-220,276-278,284,288-292,314-316,341-342
+  s_23b6c2bebf5378::t_684d4186cc9f9a 262-263
+  s_23b6c2bebf5378::t_ef73c28de9a611 88
+  s_23b6c2bebf5378::t_a310d3b4c6adee 165-166
+  s_23b6c2bebf5378::t_9459c5109005e9 298,307,311
+  s_23b6c2bebf5378::t_109ae3200457b3 144-146
+  s_23b6c2bebf5378::t_8e9cc0bab4deba 309-310
+  s_23b6c2bebf5378::t_74d943cdb8d559 235-236
+  s_23b6c2bebf5378::t_c64dc3ce7fc6b1 312-313
+  s_23b6c2bebf5378::t_8dab21d037b7ca 323-328
+  s_23b6c2bebf5378::t_12b5f3c6714e2b 223-224
+  s_23b6c2bebf5378::t_703d963ec1ec10 99-103
+  s_23b6c2bebf5378::t_9f3c955db962f7 226-228
+  s_23b6c2bebf5378::t_d43fb8da6f6fbf 267-269
+  s_23b6c2bebf5378::t_2c6d9a139d3b29 345-348
+  s_23b6c2bebf5378::t_96838317326508 127-128
+  s_23b6c2bebf5378::t_0d3d5e3cec3404 349-351
+  s_23b6c2bebf5378::t_0403f599d11ef4 221-222
+  s_23b6c2bebf5378::t_4dfe783cddfe25 257-261
+  s_23b6c2bebf5378::t_fed57a6e13e5e6 85-87
+  s_23b6c2bebf5378::t_11c6c114f3ed49 137-140
+  s_23b6c2bebf5378::t_8dd1ed39265b35 36-37
+  s_23b6c2bebf5378::t_7ee672d2de6781 70
+  s_23b6c2bebf5378::t_56a5ae87c2d56a 110-114
+  s_23b6c2bebf5378::t_ee3e25d5559f10 167-168
+  s_23b6c2bebf5378::t_5a481629fb830f 270-272
+  s_23b6c2bebf5378::t_bdd316d6275be3 18,24-28,43-45,54-55,120-121,225,229,234,243,246,249,253-256,264-266,279-283,285-287,308,322,338
+  s_23b6c2bebf5378::t_9cbea23b750b2c 154-155
+  s_23b6c2bebf5378::t_85ca28976aae42 158
+  s_23b6c2bebf5378::t_995a7c44bfd958 237-239
+  s_23b6c2bebf5378::t_82f79609affc88 40-41
+  s_23b6c2bebf5378::t_2a7670d300d2d8 29-31
+  s_23b6c2bebf5378::t_652b713f46521f 177-215
+  s_23b6c2bebf5378::t_f43f5410c33af0 250
+  s_23b6c2bebf5378::t_69c16bb51d227f 305-306
+  s_23b6c2bebf5378::t_6b2342ba212e1b 339-340
+  s_23b6c2bebf5378::t_3c15e22ddd48f9 159-160
+specs/002-signature-idempotency/plan.md
+  s_afecfd997c55f8::t_5f31b4fa6bddfc 69
+  s_afecfd997c55f8::t_4b2a8590f5187e 373-380
+  s_afecfd997c55f8::t_1259ae9dca2fea 1-68,70-372,381-550
+specs/002-signature-idempotency/tasks.md
+  s_2f98e29cbdac1e::t_95a9bc406983a5 65-66,96,102,107,193,200,205,209,214-215,224-225,231,236-237,239-240,242,251,265,281,310,319,324,328,333,346-357,369,374,380,394-396,401-404,438-440,443-446
+  s_2f98e29cbdac1e::t_6feaa3c420132e 389,393,398,400
+  s_2f98e29cbdac1e::t_d150c2a9696165 1-64,67-95,97-101,103-106,108-192,194-199,201-204,206-208,210-213,226-230,232-235,238,241,243-250,252-264,266-280,282-309,311-318,320-323,325-327,329-332,334-345,358-368,370-373,375-379,381-388,390-392,397,399,405-437,441-442,448-484
+  s_2f98e29cbdac1e::t_9c044fc7b0142d 447
+  s_2f98e29cbdac1e::t_82a494ce29bbc9 216-223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "8db110d17058d9399a5d85342bb72d91a1ca2f59",
+  "prompts": {},
+  "sessions": {
+    "s_23b6c2bebf5378": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "74239e9b-7d75-4ad1-b397-74e2f0ac8ecd",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    },
+    "s_2f98e29cbdac1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0fe5693-4aab-4cf4-a940-3524c84b8c31",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    },
+    "s_afecfd997c55f8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e7988151-b5c7-43a2-a377-73af8ea44c3e",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
