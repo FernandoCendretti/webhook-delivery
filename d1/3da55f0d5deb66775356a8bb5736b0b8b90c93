@@ -1,0 +1,316 @@
+internal/delivery/http_client.go
+  s_0d39f4b461fde2::t_67386d29ecb892 1-20
+internal/store/delivery_store.go
+  s_0d39f4b461fde2::t_4348fbb9eb185e 122-123
+  s_0d39f4b461fde2::t_a8af562ad3ec15 133-134
+  s_0d39f4b461fde2::t_9137f336acf9a8 246-260
+  s_0d39f4b461fde2::t_cfdc474afb7cb7 41-42
+  s_0d39f4b461fde2::t_704ee15d34a25d 98-99
+  s_0d39f4b461fde2::t_280e57270742d1 180-245
+  s_0d39f4b461fde2::t_68279e917f8293 26-27
+  s_0d39f4b461fde2::t_f917cca27e15c4 1-15,17-20,22-25,28-40,43-97,100-109,112-121,124-132,135-179,261-266
+  s_0d39f4b461fde2::t_f8aefb95f622e2 16,21
+  s_0d39f4b461fde2::t_caed844b50a9cc 110-111
+internal/api/handlers_event.go
+  s_0d39f4b461fde2::t_b679039c546591 48-50,54-56,64-66,75-77
+  s_0d39f4b461fde2::t_7c53d8c1c2fede 1-12,14-21,25-31,38-47,51-53,57-63,67-74,78-82
+  s_0d39f4b461fde2::t_97a503b2465661 13,22-24,32-37
+internal/service/event_service.go
+  s_0d39f4b461fde2::t_d26ec8481c0eaa 9
+  s_0d39f4b461fde2::t_5412672cffd778 43
+  s_0d39f4b461fde2::t_da856f7c4e0360 1-8,10-15,18-22,25-28,30-42,44-70
+  s_0d39f4b461fde2::t_d9b413ee83861f 16-17,23-24,29
+.github/workflows/ci.yml
+  s_36858a7ee17320::t_a7d6bb2b137854 1-28
+internal/observability/metrics.go
+  s_0d39f4b461fde2::t_f292a7e08c4b57 24-25
+  s_0d39f4b461fde2::t_4b713bae0ae483 10
+  s_0d39f4b461fde2::t_b5f58d0874c132 98
+  s_36858a7ee17320::t_be5938b224ee5b 1-9,11-23,26-97,99-101
+internal/domain/retry_test.go
+  s_0d39f4b461fde2::t_4dcb6772a564f0 8-34
+  s_36858a7ee17320::t_42b4d63ec40f10 1-7,35-70
+internal/store/migrations/001_init.sql
+  s_36858a7ee17320::t_bdae455c61ec79 1-72
+internal/config/config.go
+  s_36858a7ee17320::t_10c79fe0d25f50 1-9,11,15-16,18-19,21,25,27-29,31-32,40-42,44-45,63-68,70-71,85,90-126
+  s_0d39f4b461fde2::t_9f0990e1ee6b89 10,12-14,17,20,22-24,26,30,33-39,43,46-62,69,72-84,86-89
+.env.example
+  s_36858a7ee17320::t_13df86ab8ec2dd 1-40
+tests/integration/api_deliveries_test.go
+  s_0d39f4b461fde2::t_9139a5b34a6e6d 1-17,20-49,51-104,106-165
+  s_0d39f4b461fde2::t_513a6460a9c90d 105
+  s_0d39f4b461fde2::t_4105260679530c 18-19
+  s_0d39f4b461fde2::t_c5588087df5c64 50
+.golangci.yml
+  s_36858a7ee17320::t_256018c60db66e 1-22
+internal/domain/event.go
+  s_36858a7ee17320::t_0f1dd8a9ab2b0e 1-8,10-15
+  s_0d39f4b461fde2::t_dc91df708a3b7c 9
+internal/api/middleware.go
+  s_0d39f4b461fde2::t_1f1bc2b1b56e25 67,73
+  s_0d39f4b461fde2::t_0d65182fb0a488 28-29
+  s_0d39f4b461fde2::t_306fe66139f024 14-15
+  s_36858a7ee17320::t_a6470ddb8031eb 1-13,16-27,30-46,49-66,68-72,74-87
+  s_0d39f4b461fde2::t_937e16d49bbad6 47-48
+internal/delivery/outcome_test.go
+  s_0d39f4b461fde2::t_1aa85aa33369b9 1-53
+internal/domain/retry.go
+  s_36858a7ee17320::t_aa06486efac78e 1-8,12-22,24-81
+  s_36858a7ee17320::t_949a2dd41f4018 9-11,23
+internal/api/server.go
+  s_0d39f4b461fde2::t_c7b187d8f8cf5d 75-80
+  s_0d39f4b461fde2::t_5b616163221716 15,23,31
+  s_36858a7ee17320::t_f0da047789b920 1-11,13-14,16-22,24-30,32-60,83-132
+  s_0d39f4b461fde2::t_ec44e3ed2f4abf 71
+  s_92b5ce8e00e0f1::t_6582cf9feb9595 61-68
+  s_0d39f4b461fde2::t_27eb0c04a80f06 69-70,72-74
+  s_92b5ce8e00e0f1::t_b0599c145937ea 12
+  s_0d39f4b461fde2::t_9d3d58c1a2d968 81-82
+internal/recovery/reaper.go
+  s_0d39f4b461fde2::t_d38a437d8f5c24 1-16,18-24,27-30,32-71
+  s_0d39f4b461fde2::t_aebe524cc8b5d0 17,25-26,31
+tests/integration/pipeline_test.go
+  s_0d39f4b461fde2::t_b4689f7ffb7388 1-107,109-146
+  s_0d39f4b461fde2::t_685bd1885482e3 108
+tests/integration/scheduler_test.go
+  s_0d39f4b461fde2::t_f53f0b96e7d851 1-76
+internal/api/handlers_delivery.go
+  s_0d39f4b461fde2::t_ec98374be0269c 1-52
+internal/api/handlers_event_test.go
+  s_0d39f4b461fde2::t_e46ea48b40b17c 1-66
+specs/001-receive-deliver/tasks.md
+  s_0d39f4b461fde2::t_ba462ca67741c8 103-114
+  s_36858a7ee17320::t_58b08d241aa03e 37
+  s_36858a7ee17320::t_055bec897b8df2 44
+  s_0d39f4b461fde2::t_1144a2707f5597 138-142
+  s_36858a7ee17320::t_d717e0893a1ca6 47
+  s_92b5ce8e00e0f1::t_1aa80ad8ff9d3a 80
+  s_36858a7ee17320::t_16bf42ca2d3d8c 46
+  s_36858a7ee17320::t_4cc4b7bdadcef8 42
+  s_36858a7ee17320::t_bbb064708b7999 25
+  s_92b5ce8e00e0f1::t_5c135fdeb88d15 77
+  s_36858a7ee17320::t_5f4d0ff11a86f8 1-21,28-36,50,56-69,72-74,81-95,100-102,116-128,135-137,143-155,157-159,165-173,180-245
+  s_0d39f4b461fde2::t_d502a04f76ac4c 96-99
+  s_0d39f4b461fde2::t_93405781b4cb86 156,160-164
+  s_36858a7ee17320::t_c741e9e14f68bc 39
+  s_36858a7ee17320::t_1d90055541e345 24
+  s_36858a7ee17320::t_9a22b5575ab0cc 43
+  s_92b5ce8e00e0f1::t_71a6f49b22f071 79
+  s_0d39f4b461fde2::t_80c069f8a34812 115
+  s_0d39f4b461fde2::t_a8d051a405eb35 129-134
+  s_36858a7ee17320::t_33898c950dcd4a 51-55
+  s_36858a7ee17320::t_40c6e95ca40021 48
+  s_92b5ce8e00e0f1::t_f2acbcacdb3d00 70-71
+  s_36858a7ee17320::t_a34f860f0959fc 41
+  s_92b5ce8e00e0f1::t_dbcbb209b4c997 75
+  s_0d39f4b461fde2::t_79d3e8061882f9 174-179
+  s_36858a7ee17320::t_1ae8c792a99a1a 38
+  s_36858a7ee17320::t_7b0ecc325da6fc 45
+  s_36858a7ee17320::t_00b702b2f9404d 23
+  s_36858a7ee17320::t_007e1f60a9d3a7 40
+  s_92b5ce8e00e0f1::t_4c3958dfba2747 76
+  s_92b5ce8e00e0f1::t_800476d4ca9053 78
+  s_36858a7ee17320::t_de526ffefe1c07 49
+  s_36858a7ee17320::t_e3081f8252219f 26
+  s_36858a7ee17320::t_cad1db5d6d40c0 27
+  s_36858a7ee17320::t_1a3ebebafba6cd 22
+specs/001-receive-deliver/plan.md
+  s_36858a7ee17320::t_21b4bafc50167a 549-560
+  s_36858a7ee17320::t_091f404d026889 482-525
+  s_36858a7ee17320::t_d251de6b9a538b 478
+  s_36858a7ee17320::t_be55c99722ee32 2,5-7,9-10,31,33,51-55,58,60-65,68-69,112-113,120-121,123-127,174-176,244-245,267,269,313,367,369,476-477,481,526-527,534,536,538-539,548,561-563
+  s_36858a7ee17320::t_8102875ea39431 569
+  s_36858a7ee17320::t_0cf67d7e4ee2a6 1,3-4,8,11-30,32,34-50,56-57,59,66-67,70-111,114-119,122,128-173,177-243,246-266,268,270-312,314-366,368,370-475,479-480,528-533,535,537,540-547,564-568
+internal/queue/consumer.go
+  s_36858a7ee17320::t_10ca08dcf75db2 1-10,12-18,20-24,26-41,43-50,52-58,60-62
+  s_0d39f4b461fde2::t_08f768b46c230c 51
+  s_0d39f4b461fde2::t_84ed8c6225bc5a 42
+  s_0d39f4b461fde2::t_27a83dbbe15a71 11,19,25
+  s_0d39f4b461fde2::t_09ba01b8d4b739 59
+tests/integration/retry_test.go
+  s_0d39f4b461fde2::t_c1f25ace0b57dc 1-29,31,33-64,67-91,94-118,121-131,135-149,151-154
+  s_0d39f4b461fde2::t_f3fe68c7e07ab0 65-66
+  s_0d39f4b461fde2::t_1aa0d4803aedba 30,32
+  s_0d39f4b461fde2::t_fa97bc77a2ae68 119-120
+  s_0d39f4b461fde2::t_e3dab9bdf1c60f 132-134,150
+  s_0d39f4b461fde2::t_34abe889732a1c 92-93
+Makefile
+  s_36858a7ee17320::t_84d06a6e30fbb1 38,41
+  s_36858a7ee17320::t_f844fd5517ad48 1-2,9,15-22,24-37,39-40,42-50
+  s_36858a7ee17320::t_f59469e3db6e40 3-8
+  s_92b5ce8e00e0f1::t_92d4ab5eae0bfd 23
+  s_36858a7ee17320::t_3a82773bc3b4e9 10-14
+internal/delivery/worker.go
+  s_0d39f4b461fde2::t_35177ae917b21c 45
+  s_0d39f4b461fde2::t_30e0708a6900c7 38,49-50,55-56
+  s_0d39f4b461fde2::t_3d284a1bd136bb 1-15,17-24,26-37,39-44,46-48,51-54,57-105,107-125,138,154-179
+  s_0d39f4b461fde2::t_07440cd19076a6 127-131
+  s_0d39f4b461fde2::t_3f5ce777fb4cae 16
+  s_0d39f4b461fde2::t_034397135a7c9e 25
+  s_0d39f4b461fde2::t_16c541080678e7 106
+  s_0d39f4b461fde2::t_9d09da7ca1b36c 126,132-137,139-153
+internal/domain/delivery.go
+  s_0d39f4b461fde2::t_d27a02f6de1b95 41-42
+  s_0d39f4b461fde2::t_2afeccab633b2d 52
+  s_36858a7ee17320::t_6edfa93bf828f0 1-10,12-14,22-24,26-27,29-40,43-51,53-62,64-73,76-85
+  s_0d39f4b461fde2::t_a535c79d331f38 74-75
+  s_0d39f4b461fde2::t_e2b222c9258871 63
+  s_0d39f4b461fde2::t_95aad06e3251dc 11,15-21,25,28
+tests/integration/api_endpoints_test.go
+  s_92b5ce8e00e0f1::t_5c9f46cbcc4cf0 72
+  s_92b5ce8e00e0f1::t_6f13a6729ab4f6 1-29,31-71,73-215
+  s_92b5ce8e00e0f1::t_bb76d5f66223ad 30
+go.mod
+  s_36858a7ee17320::t_59e67041ec8ca1 3-10,13-15,19,21,36-38,51,54,57-59,71,76,78
+  s_36858a7ee17320::t_41c3d0ada0adec 1-2
+  s_92b5ce8e00e0f1::t_808068644b1663 11-12
+  s_92b5ce8e00e0f1::t_5f84b2d24f467c 16-18,20,22-35,39-50,52-53,55-56,60-70,72-75,77
+cmd/webhookd/main.go
+  s_0d39f4b461fde2::t_7909bad814c3ed 185,188-189
+  s_0d39f4b461fde2::t_81f17843c3157b 213
+  s_0d39f4b461fde2::t_6305c56ea7b1d9 152
+  s_36858a7ee17320::t_1b0b16405add46 1-4,6,9-10,12,24-62,64-72,102,148-150,209-211,278
+  s_0d39f4b461fde2::t_18314251cfc3e7 73-101,104
+  s_0d39f4b461fde2::t_b2c0d6c0949e6f 7-8
+  s_0d39f4b461fde2::t_7e79e2783df331 206
+  s_0d39f4b461fde2::t_ae22a3d810dba1 239
+  s_0d39f4b461fde2::t_b804a760baa5ef 182-183
+  s_0d39f4b461fde2::t_225cdeb2e78fa7 131-132,142
+  s_0d39f4b461fde2::t_3a0da3ea78ba2a 11,13,17,19,21
+  s_92b5ce8e00e0f1::t_b4d89dd316173b 5,14-16,18,22-23
+  s_0d39f4b461fde2::t_075b54c75ca174 144
+  s_92b5ce8e00e0f1::t_b693054d61fd2c 103,105-129,133-140,143,145-147
+  s_0d39f4b461fde2::t_02dfc4d052cb50 151,153-181,184,186-187,190-205,207-208,212,214-238,240-243,247,249-251,253,261-262,264
+  s_0d39f4b461fde2::t_1c16232ef8a659 244-246,248,252,254-260,265-277
+  s_0d39f4b461fde2::t_528bbb994086ef 130,141
+  s_0d39f4b461fde2::t_d6da7b6a361e8a 263
+  s_36858a7ee17320::t_e6cf4bd5d1fd4f 63
+  s_0d39f4b461fde2::t_12f25a1952b2bc 20
+.editorconfig
+  s_36858a7ee17320::t_9f35e69665cda0 1-18
+internal/service/delivery_service.go
+  s_0d39f4b461fde2::t_9f6d083659c44e 1-23,25-28,30-42
+  s_0d39f4b461fde2::t_6ad8167578d5c5 24,29
+tests/integration/helpers_test.go
+  s_0d39f4b461fde2::t_75a8fbdbfe8384 187-191
+  s_0d39f4b461fde2::t_d804b32fbb5d67 31,39
+  s_0d39f4b461fde2::t_6e6b0a156e5c52 7-8,16,22-26
+  s_0d39f4b461fde2::t_2e686ad41f1c70 1-6,9-10,12-15,17-21,27-30,32-38,40-93
+  s_0d39f4b461fde2::t_bf184fa8264b68 11
+  s_0d39f4b461fde2::t_c72e74040353da 94-186,192-208
+internal/observability/logger.go
+  s_36858a7ee17320::t_89e6f3736a5324 1-14,16-20,22-25,28-40,43-46,49-55,58-76
+  s_0d39f4b461fde2::t_aff0784337519f 15,21,26-27
+  s_0d39f4b461fde2::t_b4d198d0a17e9c 41-42,47-48,56-57
+.dockerignore
+  s_0d39f4b461fde2::t_0916aa277f1697 1-29
+README.md
+  s_0d39f4b461fde2::t_e147c534470dfa 75-209
+  s_0d39f4b461fde2::t_44773a95cdb1e4 5
+docker-compose.yml
+  s_36858a7ee17320::t_0c692875361cc5 1-49
+internal/domain/endpoint_test.go
+  s_92b5ce8e00e0f1::t_9fefd4e7cb50e9 1-44
+internal/domain/errors.go
+  s_92b5ce8e00e0f1::t_c791bf3b9b4259 1-8
+internal/store/attempt_store.go
+  s_0d39f4b461fde2::t_9096c356e601b1 1-12,14-17,19-55
+  s_0d39f4b461fde2::t_cf4367199b8a59 13,18
+internal/queue/publisher.go
+  s_0d39f4b461fde2::t_8037e7c8feae35 11,18,24
+  s_0d39f4b461fde2::t_230de676225bb2 47-48
+  s_36858a7ee17320::t_a5afb1c228107f 1-10,12-17,19-23,25-38,40-46,49-58,60-62
+  s_0d39f4b461fde2::t_ed7a111279ddf1 59
+  s_0d39f4b461fde2::t_c13a2b9a927002 39
+internal/delivery/outcome.go
+  s_0d39f4b461fde2::t_19a1843591e88c 1-3,5-46,48
+  s_0d39f4b461fde2::t_bd8c4104800ee3 47
+  s_0d39f4b461fde2::t_996f7c9d3f2fef 4
+tests/integration/recovery_test.go
+  s_0d39f4b461fde2::t_9f862faa1c2cc0 7-8,18,26-30,32,38-39,41,44-45,58,61,67,70,73,75,78-79,83,87,89,91-92,95,97,101,106,112,116,122
+  s_0d39f4b461fde2::t_d6168b73568911 1-6,9-17,19-25,31,33-37,40,42-43,46-57,59-60,62-66,68-69,71-72,74,76-77,80-82,84-86,88,90,93-94,96,98-100,102-105,107-111,113-115,117-121,123-126
+tests/integration/sc007_test.go
+  s_0d39f4b461fde2::t_d4cb613c3211a2 20,33,41-43,48,50,52,57,66-67,69-71,73-75,77-78,80-81,83-85,88,91,93,97-98,100,102-104,107,119-128,130-131,133-137,143,145,149,153,157,160,164,168,172,174-175,177,180,184,187-188,191-192,194-196,199,203,205-207,211-212,218-229
+  s_0d39f4b461fde2::t_fbf43691fb5114 1-19,21-32,34-40,44-47,49,51,53-56,58-65,68,72,76,79,82,86-87,89-90,92,94-96,99,101,105-106,108-118,129,132,138-142,144,146-148,150-152,154-156,158-159,161-163,165-167,169-171,173,176,178-179,181-183,185-186,189-190,193,197-198,200-202,204,208-210,213-217,230
+internal/service/endpoint_service.go
+  s_0d39f4b461fde2::t_6d6dd39ae7e614 20,25
+  s_92b5ce8e00e0f1::t_a3bc71aeabcf40 1-19,21-24,26-48
+internal/scheduler/scheduler.go
+  s_0d39f4b461fde2::t_54950c8ac966ff 28,38-39,44-45
+  s_0d39f4b461fde2::t_0d0b96a8cc4c8d 13
+  s_0d39f4b461fde2::t_aaaaa856dc9fa6 75-78
+  s_0d39f4b461fde2::t_bdae1143fcfce2 1-12,14-27,29-33,35-37,40-43,46-74,79-97
+  s_0d39f4b461fde2::t_639e67a3dc714b 34
+internal/domain/endpoint.go
+  s_36858a7ee17320::t_2136341ccfcbad 1-12,14-15,17-22,25-44
+  s_0d39f4b461fde2::t_034dfac606e743 13,16,23-24
+internal/domain/attempt.go
+  s_36858a7ee17320::t_f88bd674aa2efd 1-8,10-12,16,18,21-22,24-27,29-32,34-43
+  s_0d39f4b461fde2::t_ceee65fc00bc1c 9,13-15,17,19-20,23,28,33
+internal/store/postgres.go
+  s_0d39f4b461fde2::t_f876d83049d307 12,18-19
+  s_36858a7ee17320::t_8b737a1604bb26 1-11,13-17,20-64
+internal/api/handlers_endpoint.go
+  s_92b5ce8e00e0f1::t_a67ca3d391d2d7 1-76
+internal/store/endpoint_store.go
+  s_0d39f4b461fde2::t_460a976e1cd967 15,20
+  s_92b5ce8e00e0f1::t_fa5f1a0e845c5a 1-14,16-19,21-47
+specs/001-receive-deliver/spec.md
+  s_36858a7ee17320::t_17ee2c61921dc3 2,4,6-8,10,12,14,16-18,23-25,27,29,31,33-35,42-44,46,48,50,52-53,61,63-65,67,69,71,73,75,79,81,83,91,93,95,122-126,134-136
+  s_36858a7ee17320::t_d43de799f1c86a 1,3,5,9,11,13,15,19-22,26,28,30,32,45,47,49,51,54,66,68,70,72,74,76-78,80,82,84-87,89-90,92,94,96-109,112-121,127-133,137-140,142-149
+  s_36858a7ee17320::t_7f97c15f9cac57 57
+  s_36858a7ee17320::t_204e458701b569 36-41
+  s_36858a7ee17320::t_738e1332b88172 56,58-60
+  s_36858a7ee17320::t_e1d40edfc7be94 55
+  s_36858a7ee17320::t_82d9bc77ef8975 111
+  s_36858a7ee17320::t_8991d066b61b6e 141
+  s_36858a7ee17320::t_7baed0ebef9c7b 62
+  s_36858a7ee17320::t_0dc99cdc96fb61 110
+  s_36858a7ee17320::t_7320c40c3b8883 88
+tests/integration/api_events_test.go
+  s_0d39f4b461fde2::t_249585cb312c72 1-20,23-129
+  s_0d39f4b461fde2::t_d082601c7d0000 21-22
+internal/api/dto.go
+  s_0d39f4b461fde2::t_aa1195e102d256 44-55
+  s_0d39f4b461fde2::t_e917420599622e 4
+  s_92b5ce8e00e0f1::t_876a3067fd4ddb 1-3,5-11,19-28,30-35,37-43
+  s_92b5ce8e00e0f1::t_eb9e8b3fce7d8d 13-17
+  s_0d39f4b461fde2::t_bef4aaba72bf7f 29,36
+  s_0d39f4b461fde2::t_f9e47bb6dbf54e 12,18
+  s_0d39f4b461fde2::t_ab7ade0d72f416 56-112
+Dockerfile
+  s_0d39f4b461fde2::t_f74dcd08740863 1-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "d13da55f0d5deb66775356a8bb5736b0b8b90c93",
+  "prompts": {},
+  "sessions": {
+    "s_0d39f4b461fde2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "135af899-a3a9-4442-b856-1e5ae0c53055",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    },
+    "s_36858a7ee17320": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5da82b7a-d02e-4864-a9e5-afffc35592c9",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    },
+    "s_92b5ce8e00e0f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d89aac14-b7df-48e0-a599-5f0ccc775836",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
