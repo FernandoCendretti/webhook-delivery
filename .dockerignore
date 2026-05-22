@@ -1,0 +1,29 @@
+# Ignore everything that should not land in the Docker build context.
+
+# Version control
+.git
+.gitignore
+
+# Editor / IDE
+.idea
+.vscode
+*.swp
+
+# Claude Code
+.claude
+
+# Docs and specs (not needed at runtime)
+docs/
+specs/
+*.md
+
+# Test files
+tests/
+*_test.go
+
+# Local env overrides
+.env
+*.env
+
+# macOS artifacts
+.DS_Store
