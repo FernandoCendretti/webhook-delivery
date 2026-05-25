@@ -134,7 +134,7 @@ Kafka worker (each delivery attempt)
 Reaper (extended)
   recovery.Reaper.tick()
     → [existing] resurrect stuck in_flight deliveries
-    → [new] DELETE FROM idempotency_records WHERE expires_at <= NOW()
+    → [new] DELETE FROM idempotency_records WHERE expires_at < NOW()
 ```
 
 ### Data model
@@ -244,6 +244,7 @@ Error responses:
 
 | Status | Body | Condition |
 |--------|------|-----------|
+| `400 Bad Request` | `{ "error": "invalid_endpoint_id" }` | `{id}` is not a valid UUID |
 | `404 Not Found` | `{ "error": "endpoint_not_found" }` | `id` does not exist |
 
 #### POST /v1/events — updated to accept `Idempotency-Key`
@@ -253,13 +254,22 @@ New optional request header:
 Idempotency-Key: <string, 1–255 printable ASCII chars, 0x21–0x7E>
 ```
 
-Request body and success response unchanged: `202 { "delivery_id": "uuid", "event_id": "uuid" }`
+Request body (unchanged from feature 001):
+```json
+{
+  "endpoint_id": "uuid",
+  "payload": { ... }
+}
+```
+
+Success response (unchanged from feature 001): `202 { "delivery_id": "uuid", "event_id": "uuid" }`
 
 New error responses:
 
 | Status | Body | Condition |
 |--------|------|-----------|
 | `400 Bad Request` | `{ "error": "invalid_idempotency_key", "detail": "..." }` | Header present but empty, exceeds 255 chars, or contains non-printable/non-ASCII characters |
+| `404 Not Found` | `{ "error": "endpoint_not_found" }` | `endpoint_id` does not exist |
 | `409 Conflict` | `{ "error": "idempotency_conflict", "detail": "payload differs from original submission" }` | Same `(endpoint_id, idempotency_key)` exists with a different payload hash within the retention window |
 
 Replayed 202 responses (same key, same payload, within 24 h) return the original
@@ -292,9 +302,11 @@ from the producer's perspective.
 3. endpoint_service.RotateSecret(ctx, id):
      a. crypto/rand.Read(32 bytes) → newSecret
      b. endpoint_store.UpdateSecret(ctx, id, newSecret)
-          UPDATE endpoints SET signing_secret=$1, updated_at=NOW()
+          UPDATE endpoints SET signing_secret=$1
           WHERE id=$2
           RETURNING id   -- returns ErrNotFound if 0 rows affected
+          -- Note: updated_at is intentionally omitted; if feature 001's endpoints
+          -- table includes an updated_at column, add SET updated_at=NOW() here.
      c. return newSecret
 4. Respond 200: { signing_secret: hex.EncodeToString(newSecret) }
 ```
@@ -329,7 +341,7 @@ Both callers receive a valid (but possibly different) `signing_secret` value.
    5b. Look up existing idempotency record:
          SELECT payload_hash, event_id, delivery_id, expires_at
          FROM idempotency_records
-         WHERE endpoint_id=$1 AND idempotency_key=$2 AND expires_at > NOW()
+         WHERE endpoint_id=$1 AND idempotency_key=$2 AND expires_at >= NOW()
 
    5c. If record found AND event_id IS NOT NULL (complete record):
          - Compute payloadHash = hex(sha256(rawBody))
@@ -340,11 +352,21 @@ Both callers receive a valid (but possibly different) `signing_secret` value.
              ROLLBACK
              return (nil, domain.ErrConflict)
 
-   5d. If no record found (fresh request):
+   5d. If no record found (fresh request or expired record):
          INSERT INTO idempotency_records
            (endpoint_id, idempotency_key, payload_hash, expires_at)
          VALUES ($1, $2, hex(sha256(rawBody)), NOW() + interval '24 hours')
-         -- advisory lock guarantees no concurrent insert reaches here simultaneously
+         ON CONFLICT (endpoint_id, idempotency_key) DO UPDATE
+           SET payload_hash = EXCLUDED.payload_hash,
+               event_id     = NULL,
+               delivery_id  = NULL,
+               created_at   = NOW(),
+               expires_at   = EXCLUDED.expires_at
+         WHERE idempotency_records.expires_at < NOW()
+         -- The ON CONFLICT handles the case where an expired-but-not-yet-purged
+         -- record exists for the same key. The WHERE clause ensures the upsert
+         -- fires only for truly expired records; a non-expired record in conflict
+         -- here is impossible: step 5c would have handled it already.
 
    [always, after idempotency gate]
    5e. SELECT id FROM endpoints WHERE id=$endpointID
@@ -416,13 +438,15 @@ The existing `Reaper.tick()` gains a second SQL statement:
 
 ```sql
 DELETE FROM idempotency_records
-WHERE expires_at <= NOW();
+WHERE expires_at < NOW();
 ```
 
 This runs every `REAPER_TICK_SECONDS` (default 60 s). Purging is best-effort: the spec
 allows it (`MAY purge`) and FR-006 requires that expired records are *treated as absent*
-regardless of physical purge. The `expires_at > NOW()` predicate in all lookups enforces
-this independently.
+regardless of physical purge. The `expires_at >= NOW()` predicate in all lookups enforces
+this independently. The `<` (strict less-than) ensures the reaper does not delete records
+at the exact boundary, consistent with FR-009 ("exactly 24 hours is still within the
+retention window").
 
 ### Signing function
 
@@ -476,6 +500,40 @@ is safe (reinterpretation). Collisions produce false serialization (two unrelate
 block on each other briefly) but never produce incorrect results — correctness is enforced
 by the actual `(endpoint_id, idempotency_key)` lookup in step 5b.
 
+### IdempotencyStore interface
+
+Located in `internal/store/idempotency_store.go`. Used exclusively by `event_service.go`.
+
+```go
+type IdempotencyRecord struct {
+    PayloadHash string
+    EventID     uuid.UUID // zero-value if record is incomplete (event_id IS NULL)
+    DeliveryID  uuid.UUID // zero-value if record is incomplete
+    ExpiresAt   time.Time
+    Complete    bool      // true when EventID and DeliveryID are set
+}
+
+type IdempotencyStore interface {
+    // AcquireAdvisoryLock acquires a PostgreSQL transaction-scoped advisory lock
+    // for the given (endpointID, key) pair. The lock key is computed internally
+    // using lockKey(endpointID, key). Must be called within an open transaction.
+    AcquireAdvisoryLock(ctx context.Context, endpointID uuid.UUID, key string) error
+
+    // Lookup returns the non-expired record for the given (endpointID, key) pair.
+    // Returns (nil, nil) if no non-expired record exists.
+    Lookup(ctx context.Context, endpointID uuid.UUID, key string) (*IdempotencyRecord, error)
+
+    // Claim inserts a new partial record (event_id and delivery_id NULL).
+    // expires_at is computed internally as NOW() + 24h.
+    // If an expired record exists for the same pair, it is overwritten via
+    // ON CONFLICT DO UPDATE WHERE expires_at < NOW().
+    Claim(ctx context.Context, endpointID uuid.UUID, key string, payloadHash string) error
+
+    // Complete sets event_id and delivery_id on an existing partial record.
+    Complete(ctx context.Context, endpointID uuid.UUID, key string, eventID uuid.UUID, deliveryID uuid.UUID) error
+}
+```
+
 ## Library & Dependency Decisions
 
 No new external libraries are added to `go.mod`.
@@ -489,6 +547,10 @@ No new external libraries are added to `go.mod`.
 | Advisory lock key hashing | `hash/fnv` | Go stdlib |
 | Timestamp formatting | `strconv` | Go stdlib |
 | Raw body reading | `io` | Go stdlib |
+| UUID types and parsing | `github.com/google/uuid` | External — already in `go.mod` from feature 001 |
+| PostgreSQL client | `github.com/jackc/pgx/v5` | External — already in `go.mod` from feature 001 |
+| Integration test containers | `github.com/testcontainers/testcontainers-go` | External — test-only, already in `go.mod` from feature 001 |
+| Test assertions | `github.com/stretchr/testify` | External — test-only, already in `go.mod` from feature 001 |
 
 All approved infrastructure (PostgreSQL via pgx/v5, Kafka via segmentio/kafka-go) is
 retained unchanged.
@@ -532,9 +594,10 @@ by submitting the same key to two distinct endpoints and asserting two separate 
 | Concurrent idempotency | `pg_advisory_xact_lock` | `INSERT ON CONFLICT ... SELECT FOR UPDATE` | Advisory lock serializes before the INSERT, so the second request always sees a complete record after the lock is released — no state machine needed. `SELECT FOR UPDATE` on its own doesn't handle the rollback case where the inserting request fails before completing. |
 | Secret storage format | `BYTEA` (raw bytes) | `TEXT` (hex string) | Avoids double-encoding; `signing.Sign` receives `[]byte` directly without a decode step. The hex encoding is a presentation concern handled only in DTOs and API responses. |
 | Signing placement | `doHTTP` in worker (at attempt time) | At enqueue time in `event_service.Submit` | FR-016: the secret used must be the one active when the signature is computed. Reading from the database in `LoadForWorker` at attempt time naturally satisfies this. Signing at enqueue time would require persisting the signature and would use a stale secret after rotation. |
-| Payload hash for idempotency | `SHA-256(rawBody)` → hex string stored in `TEXT` | Full body stored in JSONB | Storage efficiency: 64 bytes per record vs potentially 1 MiB. SHA-256 is collision-resistant for this use case. |
+| Payload hash for idempotency | `SHA-256(rawBody)` → hex string stored in `TEXT` | Full body stored in JSONB | Storage efficiency: 64 bytes per record vs potentially 1 MiB. The spec defines payload equality as raw-byte identity; SHA-256 provides computationally indistinguishable equivalence — the probability of a false positive collision is ~2⁻¹²⁸, negligible for this use case. No spec FR is violated. |
+| Request body size limit | 1 MiB via `http.MaxBytesReader`, returns 413 on exceed | No limit | Defensive measure against memory exhaustion from unbounded body reads. Not required by any FR but is standard practice for HTTP handlers; an unbounded read could exhaust server memory under adversarial input. |
 | Idempotency record completeness | Two phases: insert (partial) then update (complete) | Single insert with all fields | The event and delivery IDs are not known until after the Postgres INSERT. The two-phase approach within a single transaction is necessary; the advisory lock ensures no reader observes the partial state. |
-| Redis usage | Not used in 002 | Redis for idempotency TTL | Redis TTL is best-effort and subject to clock skew; Postgres `expires_at` with a predicate check (`AND expires_at > NOW()`) gives exact boundary semantics required by FR-006 (exactly-24-hour boundary). |
+| Redis usage | Not used in 002 | Redis for idempotency TTL | Redis TTL is best-effort and subject to clock skew; Postgres `expires_at` with a predicate check (`AND expires_at >= NOW()`) gives exact boundary semantics required by FR-006 and FR-009 (exactly-24-hour boundary inclusive). |
 
 ## Open Questions
 

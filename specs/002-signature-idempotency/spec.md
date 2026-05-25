@@ -40,9 +40,11 @@ the computed value must equal `X-Webhook-Signature` exactly.
    they follow the consumer verification procedure in the Signing Scheme Contract section
    of this spec, **Then** the computed value equals the `X-Webhook-Signature` header value.
 
-3. **Given** a delivery attempt is retried due to transient failure, **When** the system
-   resends the POST, **Then** the timestamp and signature headers are recomputed for that
-   attempt (a new timestamp is used, yielding a new but valid signature).
+3. **Given** a consumer endpoint returns 503 on the first delivery attempt, **When** the
+   system retries the delivery, **Then** the `X-Webhook-Timestamp` value in the retry
+   POST differs from the first attempt's value, and applying the consumer verification
+   procedure with the retry timestamp produces a value equal to the retry's
+   `X-Webhook-Signature`.
 
 ---
 
@@ -88,8 +90,8 @@ response must be identical and exactly one delivery must exist in the system.
 
 6. **Given** two concurrent requests are submitted in parallel with the same
    `Idempotency-Key` and identical payload to the same endpoint, **When** both complete,
-   **Then** exactly one event record exists in the system and both callers receive 202
-   with the same `event_id` and `delivery_id`.
+   **Then** both callers receive 202 with the same `event_id` and `delivery_id` —
+   the identical IDs confirm that exactly one event was created.
 
 7. **Given** a producer submits an event with `Idempotency-Key: K` and the request fails
    with 400 Bad Request (e.g., malformed payload), **When** the producer corrects the
@@ -100,6 +102,10 @@ response must be identical and exactly one delivery must exist in the system.
    contains at least one character outside the printable ASCII range (0x21–0x7E),
    **When** the system processes the request, **Then** it returns 400 Bad Request and
    no event or idempotency record is created.
+
+9. **Given** a producer submits an event with an `Idempotency-Key` header whose value
+   is an empty string, **When** the system processes the request, **Then** it returns
+   400 Bad Request and no event or idempotency record is created.
 
 ---
 
@@ -259,8 +265,11 @@ produces a 64-character string.
   the new secret is persisted by the system; if the rotation response is subsequently
   lost in transit, the caller must re-call the endpoint — the prior secret is already
   invalid.
-- **FR-012**: All delivery attempts signed after the rotation response is returned to
-  the caller MUST use the new `signing_secret`.
+- **FR-012**: All delivery attempts for which signature computation occurs after the new
+  secret is persisted MUST use the new `signing_secret`. This is observable by
+  submitting an event after the rotation response is received: the resulting delivery
+  MUST carry a signature that verifies against the new secret and MUST NOT verify
+  against the prior secret.
 - **FR-013**: Idempotency keys MUST be scoped to the `(endpoint_id, idempotency_key)`
   pair. The same key value submitted to different endpoints is treated as independent
   and does not collide.
@@ -270,9 +279,12 @@ produces a 64-character string.
 - **FR-015**: The `X-Webhook-Timestamp` value MUST reflect the moment of the specific
   delivery attempt being made. For retry attempts, a new timestamp value MUST be used;
   the timestamp from an earlier attempt MUST NOT be reused.
-- **FR-016**: The `signing_secret` used for a delivery attempt MUST be the one active
-  at the moment that attempt's signature is computed — not the secret that was active
-  when the event was originally enqueued.
+- **FR-016**: If a secret rotation completes between the time an event is enqueued and
+  the time a delivery attempt is sent, the delivery POST MUST carry a signature that
+  verifies against the post-rotation secret, not the pre-rotation secret.
+- **FR-017**: When a request is deduplicated via an existing IdempotencyRecord (i.e.,
+  FR-006 applies), the system MUST NOT create or update any IdempotencyRecord — the
+  original record remains unchanged.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -282,9 +294,13 @@ produces a 64-character string.
   (`POST /v1/endpoints`) and rotation (`POST /v1/endpoints/{id}/rotate-secret`); never
   exposed through read endpoints.
 - **IdempotencyRecord**: associates an `(endpoint_id, idempotency_key)` pair with the
-  original response status, response body, and sufficient information to detect payload
-  changes on re-submission. Created only on successful (2xx) responses. Subject to
-  the 24-hour retention window.
+  original response status, response body, and a payload fingerprint used to detect
+  changes on re-submission. Two payloads are considered identical if and only if their
+  raw byte sequences are equal; any difference — including whitespace or encoding
+  variations — triggers a 409 Conflict per FR-007. Created only on successful (2xx)
+  responses. Subject to the 24-hour retention window. `event_id` and `delivery_id` are
+  as defined in feature 001 (Receive & Deliver); this feature extends those entities but
+  does not redefine them.
 
 ## Success Criteria *(mandatory)*
 
@@ -296,9 +312,10 @@ produces a 64-character string.
   procedure defined in the Signing Scheme Contract section of this spec produces a value
   equal to the `X-Webhook-Signature` header.
 - **SC-003**: Re-submitting the same event with an `Idempotency-Key` within the 24-hour
-  retention window produces zero additional Event records, zero additional Delivery
-  records, and exactly one IdempotencyRecord for that `(endpoint_id, idempotency_key)`
-  pair.
+  retention window returns the same status code, `event_id`, and `delivery_id` as the
+  original response — confirming zero additional Event or Delivery records were created
+  and that exactly one IdempotencyRecord exists for that `(endpoint_id, idempotency_key)`
+  pair (guaranteed by FR-017).
 - **SC-004**: After a secret rotation, 0% of delivery POSTs signed after the rotation
   response was returned carry signatures that verify against the prior secret; 100%
   verify against the new secret.
@@ -306,8 +323,8 @@ produces a 64-character string.
   endpoint that returns an Endpoint resource representation.
 - **SC-006**: When two or more concurrent requests with the same
   `(endpoint_id, idempotency_key)` and identical payload are processed simultaneously,
-  exactly one event record is created and all callers receive a 202 response with the
-  same `event_id` and `delivery_id`.
+  all callers receive a 202 response with the same `event_id` and `delivery_id` —
+  the identical IDs confirm that exactly one event record was created.
 - **SC-007**: Submitting the same `Idempotency-Key` value to two different endpoints
   creates two independent events — no collision occurs between keys scoped to different
   endpoints.

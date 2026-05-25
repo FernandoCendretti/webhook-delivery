@@ -64,7 +64,7 @@ depends on. No store, HTTP, or Kafka dependencies at this layer.
 
 **Run tests — confirm they FAIL before implementing `Sign`.**
 
-- [ ] T007 Implement `Sign(secret []byte, ts int64, body []byte) string` in
+- [ ] T007 [US1] Implement `Sign(secret []byte, ts int64, body []byte) string` in
       `internal/signing/signer.go` using `crypto/hmac`, `crypto/sha256`, `encoding/hex`,
       `strconv` — zero external dependencies (see plan.md §Signing function)
 
@@ -112,7 +112,7 @@ Both headers must be present. Apply the consumer verification procedure from spe
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Update `internal/store/endpoint_store.go`:
+- [ ] T012 [P] [US1] Update `internal/store/endpoint_store.go`:
       - `Insert`: include `signing_secret` in the `INSERT` statement; populate
         `ep.SigningSecret` from the returned row
       - `GetByID`: exclude `signing_secret` from the `SELECT` (leave `SigningSecret` nil)
@@ -189,6 +189,9 @@ one delivery row must exist in the database.
       `internal/store/idempotency_store_test.go`:
       - Same `(endpointID, key)` always produces the same `int64`
       - Different keys produce different values (sanity check)
+      Note: a minimal stub of `lockKey` in `internal/store/idempotency_store.go`
+      (return 0 body) is required for this test file to compile before T030's full
+      implementation is written.
 
 - [ ] T021 [US2] Integration test — happy path re-submission in
       `tests/integration/idempotency_test.go`:
@@ -249,31 +252,40 @@ one delivery row must exist in the database.
 ### Implementation for User Story 2
 
 - [ ] T030 [US2] Create `internal/store/idempotency_store.go`:
-      - Define `IdempotencyRecord` struct: fields `PayloadHash`, `EventID`, `DeliveryID`,
-        `ExpiresAt`
+      - Define `IdempotencyRecord` struct: fields `PayloadHash string`, `EventID uuid.UUID`,
+        `DeliveryID uuid.UUID`, `ExpiresAt time.Time`, `Complete bool`
+      - Declare `IdempotencyStore` interface with four methods:
+        `AcquireAdvisoryLock`, `Lookup`, `Claim`, `Complete`
+        (see plan.md §IdempotencyStore interface for full signatures)
       - Implement private `lockKey(endpointID uuid.UUID, key string) int64` using
         `hash/fnv` FNV-64a (see plan.md §Advisory lock key computation)
-      - Implement `Lookup(ctx, tx, endpointID, key) (*IdempotencyRecord, error)` — SELECT
-        with `expires_at > NOW()`
-      - Implement `Claim(ctx, tx, endpointID, key, payloadHash string, expiresAt time.Time) error`
-        — INSERT the partial record (no `event_id`/`delivery_id` yet)
-      - Implement `Complete(ctx, tx, endpointID, key string, eventID, deliveryID uuid.UUID) error`
+      - Implement `AcquireAdvisoryLock(ctx context.Context, endpointID uuid.UUID, key string) error`
+        — computes lock key via `lockKey(endpointID, key)` internally and executes
+        `SELECT pg_advisory_xact_lock($1)`; must be called within an open transaction
+      - Implement `Lookup(ctx, endpointID, key) (*IdempotencyRecord, error)` — SELECT
+        with `expires_at >= NOW()`
+      - Implement `Claim(ctx, endpointID, key, payloadHash string) error`
+        — INSERT the partial record (no `event_id`/`delivery_id` yet);
+        `expires_at` computed internally as `NOW() + interval '24 hours'`;
+        uses `ON CONFLICT (endpoint_id, idempotency_key) DO UPDATE ... WHERE expires_at < NOW()`
+        to overwrite any expired-but-not-yet-purged record for the same key
+      - Implement `Complete(ctx, endpointID, key string, eventID, deliveryID uuid.UUID) error`
         — UPDATE to set `event_id` and `delivery_id`
-      - Implement `AcquireAdvisoryLock(ctx, tx, lockKey int64) error` — executes
-        `SELECT pg_advisory_xact_lock($1)`
 
 - [ ] T031 [US2] Update `internal/service/event_service.go`:
       - Change `Submit` signature to accept `idempotencyKey string` and `rawBody []byte`
         parameters
       - Implement idempotency check-and-set flow (Flow C from plan.md) inside a
         single database transaction:
-        1. If `idempotencyKey != ""`: acquire advisory lock, call
-           `idempotency_store.Lookup`
+        1. If `idempotencyKey != ""`: call
+           `idempotency_store.AcquireAdvisoryLock(ctx, tx, endpointID, idempotencyKey)`,
+           then call `idempotency_store.Lookup`
         2. If complete record found with matching hash → return cached
            `(event_id, delivery_id)` (rollback transaction first)
         3. If complete record found with different hash → return `domain.ErrConflict`
-        4. If no record → call `idempotency_store.Claim` with
-           `hex(sha256(rawBody))` and `NOW() + 24h`
+        4. If no record → call `idempotency_store.Claim(ctx, tx, endpointID,
+           idempotencyKey, hex(sha256(rawBody)))` (`expires_at` computed internally
+           by the store — do NOT pass it as a parameter)
         5. INSERT event and delivery (existing logic)
         6. If `idempotencyKey != ""`: call `idempotency_store.Complete`
         7. COMMIT
@@ -339,12 +351,12 @@ the old secret.
 
 **Run tests — confirm they FAIL before implementing.**
 
-### Implementation for User Story 3
+### Verification tasks for User Story 3
 
 > Note: The handler (`RotateSecret`) and service method (`RotateSecret`) were
 > implemented in Phase 3 (T015, T016) as part of the US1 signing infrastructure.
-> The following tasks cover store-level verification and an integration-level test
-> not already covered.
+> T038 and T039 below are test tasks — they verify edge-case behavior of code
+> already written in Phase 3. No new production code is introduced in this section.
 
 - [ ] T038 [US3] Add unit test `TestUpdateSecret_NotFound` in
       `internal/store/endpoint_store_test.go`: call `UpdateSecret(ctx, randomUUID, secret)`
@@ -366,13 +378,15 @@ old-secret rejection.
 
 **Purpose**: Reaper purge, cross-cutting edge cases, end-to-end verification, cleanup.
 
-- [ ] T040 Update `internal/recovery/reaper.go` — add periodic purge of expired
+- [ ] T040 [US2] Update `internal/recovery/reaper.go` — add periodic purge of expired
       idempotency records to `tick()`:
-      `DELETE FROM idempotency_records WHERE expires_at <= NOW()`
-      (Flow E from plan.md)
+      `DELETE FROM idempotency_records WHERE expires_at < NOW()`
+      (Flow E from plan.md — strict `<` preserves records at the exact 24-hour boundary
+      per FR-009)
 
-- [ ] T041 [P] Integration test for reaper purge in
-      `tests/integration/reaper_idempotency_test.go`:
+- [ ] T041 Integration test for reaper purge in
+      `tests/integration/reaper_idempotency_test.go`
+      (depends on T040 — reaper.go must be updated first):
       - Insert an `idempotency_records` row with `expires_at = NOW() - interval '1s'`
       - Run `reaper.tick()` (or the DB statement directly)
       - Assert the row is deleted
@@ -395,7 +409,11 @@ old-secret rejection.
       resulting JSON string does NOT contain the substring `"signing_secret"` —
       enforces at test level that the secret never leaks through read responses (SC-005)
 
-- [ ] T045 Run `go vet ./...` and linter (`golangci-lint run ./...`); fix any findings
+- [ ] T045 Run `go vet ./internal/... ./tests/...` and
+      `golangci-lint run ./internal/... ./tests/...`; fix any findings across all
+      packages modified in this feature (`internal/signing/`, `internal/store/`,
+      `internal/service/`, `internal/api/`, `internal/delivery/`,
+      `internal/recovery/`, `tests/integration/`)
 
 - [ ] T046 Update `docs/api-reference.md` (create if absent): document the updated
       `POST /v1/endpoints` 201 response body (add `signing_secret` field example),
@@ -444,7 +462,8 @@ end-to-end. Feature 002 is production-ready.
 - T021–T029 (US2 integration tests) are sequential (same file: `idempotency_test.go`)
 - T030, T031, T032 must run in order (store → service → handler)
 - T033–T037 (US3 tests) are sequential (same file: `endpoint_rotation_test.go`)
-- T041–T043 (Phase 6 tasks marked [P]) can run in parallel within Phase 6
+- T042–T043 (Phase 6 tasks marked [P]) can run in parallel within Phase 6 once T040/T041 are done
+- T041 depends on T040 (reaper.go update must precede the reaper integration test)
 
 ---
 
