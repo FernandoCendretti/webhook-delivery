@@ -1,0 +1,56 @@
+specs/002-signature-idempotency/plan.md
+  s_6dc5bad675f5fe::t_5a13731eedebda 527,530
+  s_6dc5bad675f5fe::t_5090bb81ff0c38 550,552-553
+  s_6dc5bad675f5fe::t_bce7e653466941 355,359-369
+  s_6dc5bad675f5fe::t_753aae18f007a8 441,446-449
+  s_6dc5bad675f5fe::t_5a6a2f9d026bd8 503-516,522-526,528-529,531-536
+  s_6dc5bad675f5fe::t_36d2a0828fb015 600
+  s_6dc5bad675f5fe::t_1af9be6e5cf302 272
+  s_6dc5bad675f5fe::t_c4a5d52a4945c6 247
+  s_6dc5bad675f5fe::t_227c26484b883f 597-598
+  s_6dc5bad675f5fe::t_473e503e43f776 137
+  s_6dc5bad675f5fe::t_5aab946c427c4e 517-521
+  s_6dc5bad675f5fe::t_1370afacab510a 257-265
+  s_6dc5bad675f5fe::t_6dcd918a152c5b 305,308-309
+  s_6dc5bad675f5fe::t_251d9a6195acb0 344
+  s_6dc5bad675f5fe::t_30c7f32fad40d2 551
+specs/002-signature-idempotency/tasks.md
+  s_6dc5bad675f5fe::t_70f82f1a7210b9 115
+  s_6dc5bad675f5fe::t_968f74c3e30e2a 383-385
+  s_6dc5bad675f5fe::t_fd6c81dc119e53 465-466
+  s_6dc5bad675f5fe::t_b24b2e30a2a3b4 67
+  s_6dc5bad675f5fe::t_5bf79cf5431e30 354,358-359
+  s_6dc5bad675f5fe::t_b37f02a5060fe0 192-194
+  s_6dc5bad675f5fe::t_109b5e41b9c196 412-416
+  s_6dc5bad675f5fe::t_549418ff86c785 280-282,286-288
+  s_6dc5bad675f5fe::t_20a778a168dc52 381
+  s_6dc5bad675f5fe::t_6844c7aff9da3b 255-259,262-265,267,272
+  s_6dc5bad675f5fe::t_742be7b0a2bcc5 266
+  s_6dc5bad675f5fe::t_437389a7fa7f81 268-271
+  s_6dc5bad675f5fe::t_b704314541fa8b 387-389
+specs/002-signature-idempotency/spec.md
+  s_6dc5bad675f5fe::t_cc11b3e104d8c9 282-287
+  s_6dc5bad675f5fe::t_adaf882d101db0 106-109
+  s_6dc5bad675f5fe::t_b68ece1b6cd905 93-94
+  s_6dc5bad675f5fe::t_3a382762d5bf0e 315-318
+  s_6dc5bad675f5fe::t_3cc2d500e64263 268-272
+  s_6dc5bad675f5fe::t_8caa7719daf4b3 43-47
+  s_6dc5bad675f5fe::t_4676b4239b472c 297-303
+  s_6dc5bad675f5fe::t_2468ab94eee3da 326-327
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "e4386e13105d619b600ec727ab97b4c19a5a1767",
+  "prompts": {},
+  "sessions": {
+    "s_6dc5bad675f5fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7235f929-8454-4ad5-94d9-63d0eb8ac955",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
