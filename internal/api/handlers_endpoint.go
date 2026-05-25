@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -24,7 +25,8 @@ func newEndpointHandler(svc *service.EndpointService, log *slog.Logger) *endpoin
 	return &endpointHandler{svc: svc, log: log}
 }
 
-// Create handles POST /v1/endpoints.
+// Create handles POST /v1/endpoints. The 201 response includes signing_secret
+// as a hex string — the only time it is exposed (FR-001).
 func (h *endpointHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req EndpointRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -41,7 +43,34 @@ func (h *endpointHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "")
 		return
 	}
-	writeJSON(w, http.StatusCreated, NewEndpointResponse(*e))
+	writeJSON(w, http.StatusCreated, EndpointCreatedResponse{
+		ID:            e.ID,
+		URL:           e.URL,
+		CreatedAt:     e.CreatedAt,
+		SigningSecret: hex.EncodeToString(e.SigningSecret),
+	})
+}
+
+// RotateSecret handles POST /v1/endpoints/{id}/rotate-secret.
+func (h *endpointHandler) RotateSecret(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_endpoint_id", "")
+		return
+	}
+	newSecret, err := h.svc.RotateSecret(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "endpoint_not_found", "")
+			return
+		}
+		h.log.ErrorContext(r.Context(), "rotate secret failed", "err", err, "id", id)
+		writeError(w, http.StatusInternalServerError, "internal_error", "")
+		return
+	}
+	writeJSON(w, http.StatusOK, RotateSecretResponse{
+		SigningSecret: hex.EncodeToString(newSecret),
+	})
 }
 
 // Get handles GET /v1/endpoints/{id}. A malformed UUID in the path collapses

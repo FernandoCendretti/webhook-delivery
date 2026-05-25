@@ -64,6 +64,7 @@ func (s *Server) RegisterEndpoints(svc *service.EndpointService) {
 	h := newEndpointHandler(svc, s.cfg.Logger)
 	s.mux.HandleFunc("POST /v1/endpoints", h.Create)
 	s.mux.HandleFunc("GET /v1/endpoints/{id}", h.Get)
+	s.mux.HandleFunc("POST /v1/endpoints/{id}/rotate-secret", h.RotateSecret)
 }
 
 // RegisterEvents wires the POST /v1/events route.

@@ -107,7 +107,7 @@ func sc007Submit(ctx context.Context, t *testing.T, svc *service.EventService, e
 			t.Fatalf("context cancelled after %d/%d submissions", i, sc007EventCount)
 		case <-ticker.C:
 		}
-		d, err := svc.Submit(ctx, epID, payload)
+		d, err := svc.Submit(ctx, epID, payload, "", payload)
 		if err != nil {
 			t.Fatalf("submit event %d: %v", i, err)
 		}

@@ -10,11 +10,14 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/network"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
@@ -53,23 +56,36 @@ func testKafkaBrokers(t *testing.T) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	t.Cleanup(cancel)
 
+	// Bind container port 9092 to the same fixed host port so KAFKA_ADVERTISED_LISTENERS
+	// matches the address clients will actually reach. Tests are sequential (no
+	// t.Parallel()), so port 9092 is always free.
 	req := testcontainers.ContainerRequest{
 		Image:        "confluentinc/cp-kafka:7.6.0",
 		ExposedPorts: []string{"9092/tcp"},
-		Env: map[string]string{
-			"KAFKA_NODE_ID":                        "1",
-			"KAFKA_PROCESS_ROLES":                  "broker,controller",
-			"KAFKA_CONTROLLER_QUORUM_VOTERS":       "1@localhost:9093",
-			"KAFKA_LISTENERS":                      "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093",
-			"KAFKA_ADVERTISED_LISTENERS":           "PLAINTEXT://localhost:9092",
-			"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT",
-			"KAFKA_CONTROLLER_LISTENER_NAMES":      "CONTROLLER",
-			"KAFKA_INTER_BROKER_LISTENER_NAME":     "PLAINTEXT",
-			"KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR": "1",
-			"KAFKA_AUTO_CREATE_TOPICS_ENABLE":      "true",
-			"CLUSTER_ID":                           "MkU3OEVBNTcwNTJENDM2Qk",
+		HostConfigModifier: func(hc *container.HostConfig) {
+			hc.PortBindings = network.PortMap{
+				network.MustParsePort("9092/tcp"): []network.PortBinding{
+					{HostIP: netip.MustParseAddr("0.0.0.0"), HostPort: "9092"},
+				},
+			}
 		},
-		WaitingFor: wait.ForLog("Kafka Server started").WithStartupTimeout(90 * time.Second),
+		Env: map[string]string{
+			"KAFKA_NODE_ID":                          "1",
+			"KAFKA_PROCESS_ROLES":                    "broker,controller",
+			"KAFKA_CONTROLLER_QUORUM_VOTERS":         "1@localhost:9093",
+			"KAFKA_LISTENERS":                        "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093",
+			"KAFKA_ADVERTISED_LISTENERS":             "PLAINTEXT://localhost:9092",
+			"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP":   "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT",
+			"KAFKA_CONTROLLER_LISTENER_NAMES":        "CONTROLLER",
+			"KAFKA_INTER_BROKER_LISTENER_NAME":       "PLAINTEXT",
+			"KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR": "1",
+			"KAFKA_AUTO_CREATE_TOPICS_ENABLE":        "true",
+			"CLUSTER_ID":                             "MkU3OEVBNTcwNTJENDM2Qk",
+		},
+		WaitingFor: wait.ForAll(
+			wait.ForLog("Kafka Server started").WithStartupTimeout(90*time.Second),
+			wait.ForListeningPort("9092/tcp").WithStartupTimeout(30*time.Second),
+		),
 	}
 
 	ctr, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -81,15 +97,7 @@ func testKafkaBrokers(t *testing.T) []string {
 	}
 	t.Cleanup(func() { _ = ctr.Terminate(context.Background()) })
 
-	host, err := ctr.Host(ctx)
-	if err != nil {
-		t.Fatalf("kafka host: %v", err)
-	}
-	port, err := ctr.MappedPort(ctx, "9092")
-	if err != nil {
-		t.Fatalf("kafka port: %v", err)
-	}
-	return []string{host + ":" + port.Port()}
+	return []string{"localhost:9092"}
 }
 
 // testPipeline holds the running scheduler+worker and helper stores.
@@ -189,18 +197,19 @@ func listen() (net.Listener, error) {
 	return net.Listen("tcp", "127.0.0.1:0")
 }
 
-// seedEndpoint inserts an endpoint row directly and returns its ID.
+// seedEndpoint inserts an endpoint row with a random signing_secret and returns its ID.
 func seedEndpoint(ctx context.Context, pool *pgxpool.Pool, url string) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := pool.QueryRow(ctx,
-		`INSERT INTO endpoints (url) VALUES ($1) RETURNING id`, url).Scan(&id)
+		`INSERT INTO endpoints (url, signing_secret) VALUES ($1, gen_random_bytes(32)) RETURNING id`,
+		url).Scan(&id)
 	return id, err
 }
 
 // submitEvent calls the EventService to create an event + delivery.
 func submitEvent(ctx context.Context, svc *service.EventService, endpointID uuid.UUID) (uuid.UUID, error) {
 	payload, _ := json.Marshal(map[string]string{"test": "payload"})
-	d, err := svc.Submit(ctx, endpointID, payload)
+	d, err := svc.Submit(ctx, endpointID, payload, "", payload)
 	if err != nil {
 		return uuid.Nil, err
 	}

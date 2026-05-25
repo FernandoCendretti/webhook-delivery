@@ -26,21 +26,46 @@ func NewEventService(pool *pgxpool.Pool, endpoints *EndpointService) *EventServi
 	return &EventService{pool: pool, endpoints: endpoints}
 }
 
-// SubmitResult carries the identifiers created by a successful Submit call.
-type SubmitResult struct {
-	DeliveryID uuid.UUID
-	EventID    uuid.UUID
-}
-
-// Submit validates the endpoint exists, then atomically inserts an event and a
-// scheduled delivery inside a single transaction.
-func (s *EventService) Submit(ctx context.Context, endpointID uuid.UUID, payload json.RawMessage) (*domain.Delivery, error) {
+// Submit validates the endpoint, applies idempotency deduplication when
+// idempotencyKey is non-empty, then atomically inserts an event and a
+// scheduled delivery.
+//
+// rawBody is the unmodified request body used to compute the payload hash when
+// idempotencyKey is set. Duplicate submissions (same key, same payload hash)
+// return the original delivery without creating new rows. Same key with a
+// different payload returns domain.ErrConflict.
+func (s *EventService) Submit(ctx context.Context, endpointID uuid.UUID, payload json.RawMessage, idempotencyKey string, rawBody []byte) (*domain.Delivery, error) {
 	if _, err := s.endpoints.Get(ctx, endpointID); err != nil {
 		return nil, err
 	}
 
 	var d *domain.Delivery
 	err := store.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		idem := store.NewIdempotencyTxStore(tx)
+
+		if idempotencyKey != "" {
+			if err := idem.AcquireAdvisoryLock(ctx, endpointID, idempotencyKey); err != nil {
+				return err
+			}
+			rec, err := idem.Lookup(ctx, endpointID, idempotencyKey)
+			if err != nil {
+				return err
+			}
+			if rec != nil && rec.Complete {
+				payloadHash := store.PayloadHash(rawBody)
+				if rec.PayloadHash != payloadHash {
+					return domain.ErrConflict
+				}
+				// Return cached result — no writes needed; signal to skip the commit.
+				d = &domain.Delivery{ID: rec.DeliveryID, EventID: rec.EventID, EndpointID: endpointID}
+				return errCachedResult
+			}
+			payloadHash := store.PayloadHash(rawBody)
+			if err := idem.Claim(ctx, endpointID, idempotencyKey, payloadHash); err != nil {
+				return err
+			}
+		}
+
 		var eventID uuid.UUID
 		const insertEvent = `
 			INSERT INTO events (endpoint_id, payload) VALUES ($1, $2) RETURNING id`
@@ -61,10 +86,24 @@ func (s *EventService) Submit(ctx context.Context, endpointID uuid.UUID, payload
 			return fmt.Errorf("insert delivery: %w", err)
 		}
 		d = &tmp
+
+		if idempotencyKey != "" {
+			if err := idem.Complete(ctx, endpointID, idempotencyKey, eventID, tmp.ID); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
+		if err == errCachedResult {
+			return d, nil
+		}
 		return nil, fmt.Errorf("submit event: %w", err)
 	}
 	return d, nil
 }
+
+// errCachedResult is a sentinel returned from within InTx to signal that a
+// completed idempotency record was found. InTx rolls back (no writes are
+// needed) and Submit returns the cached delivery.
+var errCachedResult = fmt.Errorf("idempotency: cached result")

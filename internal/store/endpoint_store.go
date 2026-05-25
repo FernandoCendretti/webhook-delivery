@@ -22,18 +22,22 @@ func NewEndpointStore(pool *pgxpool.Pool) *EndpointStore {
 	return &EndpointStore{pool: pool}
 }
 
-// Insert persists e and fills the database-generated ID and CreatedAt fields
-// in place. e.URL is the only input field the caller is expected to set.
+// Insert persists e and fills the database-generated ID, CreatedAt, and the
+// echoed SigningSecret fields in place. The caller must set e.SigningSecret
+// before calling; the store stores it as raw bytes.
 func (s *EndpointStore) Insert(ctx context.Context, e *domain.Endpoint) error {
-	const q = `INSERT INTO endpoints (url) VALUES ($1) RETURNING id, created_at`
-	if err := s.pool.QueryRow(ctx, q, e.URL).Scan(&e.ID, &e.CreatedAt); err != nil {
+	const q = `
+		INSERT INTO endpoints (url, signing_secret) VALUES ($1, $2)
+		RETURNING id, created_at, signing_secret`
+	if err := s.pool.QueryRow(ctx, q, e.URL, e.SigningSecret).
+		Scan(&e.ID, &e.CreatedAt, &e.SigningSecret); err != nil {
 		return fmt.Errorf("insert endpoint: %w", err)
 	}
 	return nil
 }
 
 // GetByID returns the endpoint with the given id, or domain.ErrNotFound if
-// no such row exists.
+// no such row exists. signing_secret is intentionally excluded (FR-002).
 func (s *EndpointStore) GetByID(ctx context.Context, id uuid.UUID) (*domain.Endpoint, error) {
 	const q = `SELECT id, url, created_at FROM endpoints WHERE id = $1`
 	var e domain.Endpoint
@@ -44,4 +48,19 @@ func (s *EndpointStore) GetByID(ctx context.Context, id uuid.UUID) (*domain.Endp
 		return nil, fmt.Errorf("get endpoint: %w", err)
 	}
 	return &e, nil
+}
+
+// UpdateSecret replaces the signing secret for the given endpoint id.
+// Returns domain.ErrNotFound when no row matches.
+func (s *EndpointStore) UpdateSecret(ctx context.Context, id uuid.UUID, newSecret []byte) error {
+	const q = `UPDATE endpoints SET signing_secret = $1 WHERE id = $2 RETURNING id`
+	var dummy uuid.UUID
+	err := s.pool.QueryRow(ctx, q, newSecret, id).Scan(&dummy)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("update secret: %w", err)
+	}
+	return nil
 }

@@ -28,15 +28,15 @@ validated independently.
 the two database migrations and the new `internal/signing/` package skeleton — the
 earliest shared prerequisites that every subsequent phase depends on.
 
-- [ ] T001 Create migration `internal/store/migrations/002_signing_secret.sql` — adds
+- [x] T001 Create migration `internal/store/migrations/002_signing_secret.sql` — adds
       `signing_secret BYTEA NOT NULL` to `endpoints` with a backfill of
       `gen_random_bytes(32)` for any pre-existing rows (see plan.md §Data model)
-- [ ] T002 [P] Create migration `internal/store/migrations/003_idempotency.sql` — creates
+- [x] T002 [P] Create migration `internal/store/migrations/003_idempotency.sql` — creates
       `idempotency_records` table with columns `id`, `endpoint_id`, `idempotency_key`,
       `payload_hash`, `event_id`, `delivery_id`, `created_at`, `expires_at`; adds
       `UNIQUE (endpoint_id, idempotency_key)` constraint and
       `idx_idempotency_expires` index (see plan.md §Data model)
-- [ ] T003 [P] Create package skeleton `internal/signing/signer.go` — package declaration
+- [x] T003 [P] Create package skeleton `internal/signing/signer.go` — package declaration
       only; no logic yet (unblocks parallel test writing in T004)
 
 **Checkpoint**: Migrations exist and apply cleanly against a local Postgres container.
@@ -49,22 +49,22 @@ earliest shared prerequisites that every subsequent phase depends on.
 **Purpose**: Core types and the pure cryptographic primitive that every other component
 depends on. No store, HTTP, or Kafka dependencies at this layer.
 
-- [ ] T004 Extend `internal/domain/endpoint.go` — add `SigningSecret []byte` field to the
+- [x] T004 Extend `internal/domain/endpoint.go` — add `SigningSecret []byte` field to the
       `Endpoint` struct (nil on reads, populated only when returned by Insert or
       `LoadForWorker`)
-- [ ] T005 [P] Add `ErrConflict` sentinel to `internal/domain/errors.go` — used by
+- [x] T005 [P] Add `ErrConflict` sentinel to `internal/domain/errors.go` — used by
       `event_service` to signal idempotency key collision (FR-007)
 
 ### Signing primitive
 
-- [ ] T006 Write unit tests for `signing.Sign` in `internal/signing/signer_test.go`:
+- [x] T006 Write unit tests for `signing.Sign` in `internal/signing/signer_test.go`:
       - Known vector: fixed secret + timestamp + body → assert exact hex digest
       - Empty body: `Sign(secret, ts, []byte{})` must produce a 64-char lowercase hex string
       - Output invariants: `len(sig) == 64` and `strings.ToLower(sig) == sig` for any input
 
 **Run tests — confirm they FAIL before implementing `Sign`.**
 
-- [ ] T007 [US1] Implement `Sign(secret []byte, ts int64, body []byte) string` in
+- [x] T007 [US1] Implement `Sign(secret []byte, ts int64, body []byte) string` in
       `internal/signing/signer.go` using `crypto/hmac`, `crypto/sha256`, `encoding/hex`,
       `strconv` — zero external dependencies (see plan.md §Signing function)
 
@@ -88,23 +88,23 @@ Both headers must be present. Apply the consumer verification procedure from spe
 
 > Write these tests FIRST and confirm they FAIL before any implementation.
 
-- [ ] T008 [P] [US1] Integration test: `POST /v1/endpoints` → 201 response contains
+- [x] T008 [P] [US1] Integration test: `POST /v1/endpoints` → 201 response contains
       `signing_secret` as a non-empty 64-char lowercase hex string; subsequent
       `GET /v1/endpoints/{id}` response does NOT contain `signing_secret` field.
       File: `tests/integration/endpoint_signing_test.go`
 
-- [ ] T009 [US1] Integration test: submit an event to a registered endpoint; capture
+- [x] T009 [US1] Integration test: submit an event to a registered endpoint; capture
       the outgoing HTTP POST with an `httptest.Server`; assert both
       `X-Webhook-Timestamp` and `X-Webhook-Signature` headers are present; apply
       consumer verification procedure and assert computed value equals the header value.
       File: `tests/integration/worker_signing_test.go`
 
-- [ ] T010 [US1] Integration test: worker retries a failed delivery; each attempt
+- [x] T010 [US1] Integration test: worker retries a failed delivery; each attempt
       produces a fresh `X-Webhook-Timestamp` (different from the previous attempt's
       value); the new signature is valid against the current secret.
       File: `tests/integration/worker_signing_test.go`
 
-- [ ] T011 [US1] Integration test: empty payload delivery; `X-Webhook-Timestamp` and
+- [x] T011 [US1] Integration test: empty payload delivery; `X-Webhook-Timestamp` and
       `X-Webhook-Signature` are still present and the signature verifies correctly.
       File: `tests/integration/worker_signing_test.go`
 
@@ -112,7 +112,7 @@ Both headers must be present. Apply the consumer verification procedure from spe
 
 ### Implementation for User Story 1
 
-- [ ] T012 [P] [US1] Update `internal/store/endpoint_store.go`:
+- [x] T012 [P] [US1] Update `internal/store/endpoint_store.go`:
       - `Insert`: include `signing_secret` in the `INSERT` statement; populate
         `ep.SigningSecret` from the returned row
       - `GetByID`: exclude `signing_secret` from the `SELECT` (leave `SigningSecret` nil)
@@ -120,35 +120,35 @@ Both headers must be present. Apply the consumer verification procedure from spe
         `UPDATE endpoints SET signing_secret=$1 WHERE id=$2 RETURNING id`;
         returns `domain.ErrNotFound` when 0 rows affected
 
-- [ ] T013 [P] [US1] Update `internal/store/delivery_store.go`:
+- [x] T013 [P] [US1] Update `internal/store/delivery_store.go`:
       - Add `SigningSecret []byte` to the `WorkerDelivery` struct
       - Update `LoadForWorker` query to `JOIN endpoints e ON e.id = d.endpoint_id` and
         `SELECT ... e.signing_secret` (populates `WorkerDelivery.SigningSecret`)
 
-- [ ] T014 [P] [US1] Update `internal/api/dto.go`:
+- [x] T014 [P] [US1] Update `internal/api/dto.go`:
       - Add `EndpointCreatedResponse` struct: fields `ID`, `URL`, `CreatedAt`,
         `SigningSecret` (JSON: `"signing_secret"`)
       - Add `RotateSecretResponse` struct: field `SigningSecret` (JSON: `"signing_secret"`)
       - Ensure existing `EndpointResponse` (used by GET) does NOT include `SigningSecret`
 
-- [ ] T015 [US1] Update `internal/service/endpoint_service.go`:
+- [x] T015 [US1] Update `internal/service/endpoint_service.go`:
       - `Create`: call `crypto/rand.Read(32)` to generate `rawSecret`; set
         `ep.SigningSecret = rawSecret`; pass to `endpoint_store.Insert`; return `ep`
         (with secret populated) to the handler
       - Add `RotateSecret(ctx, id) ([]byte, error)`: calls `crypto/rand.Read(32)`,
         then `endpoint_store.UpdateSecret(ctx, id, newSecret)`; returns `newSecret`
 
-- [ ] T016 [US1] Update `internal/api/handlers_endpoint.go`:
+- [x] T016 [US1] Update `internal/api/handlers_endpoint.go`:
       - `Create` handler: use `EndpointCreatedResponse` for the 201 body (includes
         `hex.EncodeToString(ep.SigningSecret)`)
       - Add `RotateSecret` handler: parse `{id}` from path → call
         `endpoint_service.RotateSecret`; respond 200 `RotateSecretResponse` or
         404 `{ "error": "endpoint_not_found" }`
 
-- [ ] T017 [US1] Register new route in `internal/api/server.go` (or router file):
+- [x] T017 [US1] Register new route in `internal/api/server.go` (or router file):
       `POST /v1/endpoints/{id}/rotate-secret → endpointHandler.RotateSecret`
 
-- [ ] T018 [US1] Update `internal/delivery/worker.go`:
+- [x] T018 [US1] Update `internal/delivery/worker.go`:
       - `doHTTP` signature gains `signingSecret []byte` parameter
       - Inside `doHTTP`: compute `ts := time.Now().Unix()`; compute
         `sig := signing.Sign(signingSecret, ts, payload)`; set headers
@@ -175,7 +175,7 @@ one delivery row must exist in the database.
 
 > Write these tests FIRST and confirm they FAIL before any implementation.
 
-- [ ] T019 [P] [US2] Unit tests for `Idempotency-Key` header validation in
+- [x] T019 [P] [US2] Unit tests for `Idempotency-Key` header validation in
       `internal/api/handlers_event_test.go`:
       - Accept: 1-char key, 255-char key, printable ASCII boundary chars (0x21 `!`, 0x7E `~`)
       - Reject with 400: empty value (header present but blank)
@@ -185,7 +185,7 @@ one delivery row must exist in the database.
       - Reject with 400: key containing non-ASCII byte (>0x7F)
       - Accept: no header present (no idempotency, new event always created)
 
-- [ ] T020 [P] [US2] Unit test for `lockKey` determinism in
+- [x] T020 [P] [US2] Unit test for `lockKey` determinism in
       `internal/store/idempotency_store_test.go`:
       - Same `(endpointID, key)` always produces the same `int64`
       - Different keys produce different values (sanity check)
@@ -193,28 +193,28 @@ one delivery row must exist in the database.
       (return 0 body) is required for this test file to compile before T030's full
       implementation is written.
 
-- [ ] T021 [US2] Integration test — happy path re-submission in
+- [x] T021 [US2] Integration test — happy path re-submission in
       `tests/integration/idempotency_test.go`:
       - Submit (key K, payload P) → 202; record `event_id`, `delivery_id`
       - Resubmit (key K, same P) → 202 with same `event_id` and `delivery_id`
       - Assert: exactly 1 row in `events`, 1 row in `deliveries`,
         1 row in `idempotency_records` for that key
 
-- [ ] T022 [US2] Integration test — payload conflict in
+- [x] T022 [US2] Integration test — payload conflict in
       `tests/integration/idempotency_test.go`:
       - Submit (key K, payload P) → 202
       - Resubmit (key K, payload P2 where P2 ≠ P) → 409 Conflict
 
-- [ ] T023 [US2] Integration test — no header → two independent events in
+- [x] T023 [US2] Integration test — no header → two independent events in
       `tests/integration/idempotency_test.go`:
       - Submit twice without `Idempotency-Key` → two distinct `event_id` values
 
-- [ ] T024 [US2] Integration test — expired record in
+- [x] T024 [US2] Integration test — expired record in
       `tests/integration/idempotency_test.go`:
       - Submit (key K, payload P) → 202; manually set `expires_at = NOW() - interval '1s'`
         via SQL; resubmit same key → 202 with a NEW `event_id` (treated as fresh)
 
-- [ ] T025 [US2] Integration test — exact 24-hour boundary in
+- [x] T025 [US2] Integration test — exact 24-hour boundary in
       `tests/integration/idempotency_test.go` (covers US2 AS5 and FR-006):
       - Still-valid case: insert a record with `expires_at = NOW() + interval '1s'`;
         resubmit immediately → 202 with original `event_id` (window not yet elapsed)
@@ -225,24 +225,24 @@ one delivery row must exist in the database.
       - Expired case: insert a record with `expires_at = NOW() - interval '1ms'`;
         resubmit → 202 with NEW `event_id` (window elapsed)
 
-- [ ] T026 [US2] Integration test — concurrent duplicate requests in
+- [x] T026 [US2] Integration test — concurrent duplicate requests in
       `tests/integration/idempotency_test.go`:
       - Two goroutines submit simultaneously with the same key and identical payload
       - Both must receive 202 with the same `event_id`
       - Assert: exactly 1 row in `events`, 1 row in `idempotency_records`
 
-- [ ] T027 [US2] Integration test — non-2xx path does not create idempotency record in
+- [x] T027 [US2] Integration test — non-2xx path does not create idempotency record in
       `tests/integration/idempotency_test.go`:
       - Submit with `Idempotency-Key` to a non-existent `endpoint_id` → 404
       - Assert: 0 rows in `idempotency_records` for that key
 
-- [ ] T028 [US2] Integration test — key scoping per endpoint in
+- [x] T028 [US2] Integration test — key scoping per endpoint in
       `tests/integration/idempotency_test.go` (covers SC-007):
       - Submit key K to endpoint A → 202; submit same key K to endpoint B → 202
       - Assert: two distinct events created, no collision
       - Assert: `idempotency_records` count = 2, each scoped to its `endpoint_id`
 
-- [ ] T029 [US2] Integration test — 400 for invalid key characters in
+- [x] T029 [US2] Integration test — 400 for invalid key characters in
       `tests/integration/idempotency_test.go`:
       - Submit with key containing 0x00 byte → 400; assert no event or record created
       - Submit with 256-char key → 400; assert no event or record created
@@ -251,7 +251,7 @@ one delivery row must exist in the database.
 
 ### Implementation for User Story 2
 
-- [ ] T030 [US2] Create `internal/store/idempotency_store.go`:
+- [x] T030 [US2] Create `internal/store/idempotency_store.go`:
       - Define `IdempotencyRecord` struct: fields `PayloadHash string`, `EventID uuid.UUID`,
         `DeliveryID uuid.UUID`, `ExpiresAt time.Time`, `Complete bool`
       - Declare `IdempotencyStore` interface with four methods:
@@ -272,7 +272,7 @@ one delivery row must exist in the database.
       - Implement `Complete(ctx, endpointID, key string, eventID, deliveryID uuid.UUID) error`
         — UPDATE to set `event_id` and `delivery_id`
 
-- [ ] T031 [US2] Update `internal/service/event_service.go`:
+- [x] T031 [US2] Update `internal/service/event_service.go`:
       - Change `Submit` signature to accept `idempotencyKey string` and `rawBody []byte`
         parameters
       - Implement idempotency check-and-set flow (Flow C from plan.md) inside a
@@ -290,7 +290,7 @@ one delivery row must exist in the database.
         6. If `idempotencyKey != ""`: call `idempotency_store.Complete`
         7. COMMIT
 
-- [ ] T032 [US2] Update `internal/api/handlers_event.go`:
+- [x] T032 [US2] Update `internal/api/handlers_event.go`:
       - Replace `json.NewDecoder(r.Body).Decode` with
         `io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))` then `json.Unmarshal`
         (preserves `rawBody` for hashing and passes it to service)
@@ -319,7 +319,7 @@ the old secret.
 
 > Write these tests FIRST and confirm they FAIL before any implementation.
 
-- [ ] T033 [US3] Integration test — successful rotation in
+- [x] T033 [US3] Integration test — successful rotation in
       `tests/integration/endpoint_rotation_test.go`:
       - Register endpoint (capture `oldSecret`)
       - Call `POST /v1/endpoints/{id}/rotate-secret` → 200 with new `signing_secret`
@@ -328,21 +328,21 @@ the old secret.
       - Assert signature verifies with `newSecret`; assert signature does NOT verify
         with `oldSecret` (SC-004)
 
-- [ ] T034 [US3] Integration test — sequential rotations in
+- [x] T034 [US3] Integration test — sequential rotations in
       `tests/integration/endpoint_rotation_test.go`:
       - Rotate three times in sequence; capture `secret1`, `secret2`, `secret3`
       - Submit event; verify signature only against `secret3`
 
-- [ ] T035 [US3] Integration test — rotate non-existent endpoint in
+- [x] T035 [US3] Integration test — rotate non-existent endpoint in
       `tests/integration/endpoint_rotation_test.go`:
       - `POST /v1/endpoints/{random-uuid}/rotate-secret` → 404
 
-- [ ] T036 [US3] Integration test — rotation after failed delivery in
+- [x] T036 [US3] Integration test — rotation after failed delivery in
       `tests/integration/endpoint_rotation_test.go`:
       - Enqueue a delivery that fails transiently; rotate secret; trigger retry;
         outgoing POST must use new secret (FR-012, FR-016)
 
-- [ ] T037 [US3] Integration test — concurrent rotation in
+- [x] T037 [US3] Integration test — concurrent rotation in
       `tests/integration/endpoint_rotation_test.go`:
       - Two goroutines call rotate simultaneously for the same endpoint
       - Both receive 200 with a `signing_secret` value
@@ -358,12 +358,12 @@ the old secret.
 > T038 and T039 below are test tasks — they verify edge-case behavior of code
 > already written in Phase 3. No new production code is introduced in this section.
 
-- [ ] T038 [US3] Add unit test `TestUpdateSecret_NotFound` in
+- [x] T038 [US3] Add unit test `TestUpdateSecret_NotFound` in
       `internal/store/endpoint_store_test.go`: call `UpdateSecret(ctx, randomUUID, secret)`
       against a real Postgres container; assert `domain.ErrNotFound` is returned
       (verifies that T012's `UpdateSecret` correctly handles the missing-row case)
 
-- [ ] T039 [US3] Add integration test `TestRotateSecret_NotFound` in
+- [x] T039 [US3] Add integration test `TestRotateSecret_NotFound` in
       `internal/api/handlers_endpoint_test.go`: `POST /v1/endpoints/{random-uuid}/rotate-secret`
       → assert 404 response body `{ "error": "endpoint_not_found" }`
       (exercises the full path: handler → service → store → ErrNotFound propagation → 404)
@@ -378,20 +378,20 @@ old-secret rejection.
 
 **Purpose**: Reaper purge, cross-cutting edge cases, end-to-end verification, cleanup.
 
-- [ ] T040 [US2] Update `internal/recovery/reaper.go` — add periodic purge of expired
+- [x] T040 [US2] Update `internal/recovery/reaper.go` — add periodic purge of expired
       idempotency records to `tick()`:
       `DELETE FROM idempotency_records WHERE expires_at < NOW()`
       (Flow E from plan.md — strict `<` preserves records at the exact 24-hour boundary
       per FR-009)
 
-- [ ] T041 Integration test for reaper purge in
+- [x] T041 Integration test for reaper purge in
       `tests/integration/reaper_idempotency_test.go`
       (depends on T040 — reaper.go must be updated first):
       - Insert an `idempotency_records` row with `expires_at = NOW() - interval '1s'`
       - Run `reaper.tick()` (or the DB statement directly)
       - Assert the row is deleted
 
-- [ ] T042 [P] E2E test covering the full pipeline in
+- [x] T042 [P] E2E test covering the full pipeline in
       `tests/integration/e2e_signing_idempotency_test.go`:
       - Register endpoint (capture `signing_secret`)
       - Submit event with `Idempotency-Key` → 202; record `event_id`, `delivery_id`
@@ -400,22 +400,22 @@ old-secret rejection.
       - Resubmit with same key → 202 with same `event_id` and `delivery_id`
       - Assert exactly 1 event row, 1 delivery row, 1 idempotency record
 
-- [ ] T043 [P] Edge case test — `Idempotency-Key` exactly 255 chars in
+- [x] T043 [P] Edge case test — `Idempotency-Key` exactly 255 chars in
       `tests/integration/idempotency_test.go`:
       - Submit with 255-char key → 202 (accepted normally)
 
-- [ ] T044 Add JSON serialization test `TestEndpointResponse_NoSigningSecret` in
+- [x] T044 Add JSON serialization test `TestEndpointResponse_NoSigningSecret` in
       `internal/api/dto_test.go`: marshal `EndpointResponse{}` and assert that the
       resulting JSON string does NOT contain the substring `"signing_secret"` —
       enforces at test level that the secret never leaks through read responses (SC-005)
 
-- [ ] T045 Run `go vet ./internal/... ./tests/...` and
+- [x] T045 Run `go vet ./internal/... ./tests/...` and
       `golangci-lint run ./internal/... ./tests/...`; fix any findings across all
       packages modified in this feature (`internal/signing/`, `internal/store/`,
       `internal/service/`, `internal/api/`, `internal/delivery/`,
       `internal/recovery/`, `tests/integration/`)
 
-- [ ] T046 Update `docs/api-reference.md` (create if absent): document the updated
+- [x] T046 Update `docs/api-reference.md` (create if absent): document the updated
       `POST /v1/endpoints` 201 response body (add `signing_secret` field example),
       the new `POST /v1/endpoints/{id}/rotate-secret` endpoint (request, 200 response,
       404 error), and the `Idempotency-Key` header semantics for `POST /v1/events`

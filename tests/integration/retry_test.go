@@ -26,7 +26,6 @@ func TestRetry_TransientThenSuccess(t *testing.T) {
 	brokers := testKafkaBrokers(t)
 	pipe := startPipeline(ctx, t, pool, brokers, 30)
 
-	var calls atomic.Int32
 	dstURL := newFlakeyServer(t, 3, http.StatusServiceUnavailable, http.StatusOK)
 
 	epID, err := seedEndpoint(ctx, pool, dstURL)
@@ -37,7 +36,6 @@ func TestRetry_TransientThenSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
-	_ = calls
 
 	if err := waitForDeliveryStatus(ctx, pipe.DS, deliveryID, domain.StatusDelivered); err != nil {
 		t.Fatal(err)

@@ -142,19 +142,20 @@ func (s *DeliveryStore) Reschedule(ctx context.Context, id uuid.UUID, nextAt tim
 	return err
 }
 
-// LoadForWorker fetches the delivery joined with its endpoint URL and event payload
-// in a single query — used by the worker to avoid extra round-trips.
+// LoadForWorker fetches the delivery joined with its endpoint URL, signing secret,
+// and event payload in a single query — used by the worker to avoid extra round-trips.
 type WorkerDelivery struct {
-	Delivery    domain.Delivery
-	EndpointURL string
-	Payload     []byte
+	Delivery      domain.Delivery
+	EndpointURL   string
+	Payload       []byte
+	SigningSecret []byte
 }
 
 func (s *DeliveryStore) LoadForWorker(ctx context.Context, deliveryID uuid.UUID) (*WorkerDelivery, error) {
 	const q = `
 		SELECT d.id, d.event_id, d.endpoint_id, d.status::text, d.attempt_count,
 		       d.next_attempt_at, d.in_flight_lease_until, d.created_at, d.updated_at,
-		       e.url, ev.payload
+		       e.url, e.signing_secret, ev.payload
 		FROM deliveries d
 		JOIN endpoints e  ON e.id = d.endpoint_id
 		JOIN events    ev ON ev.id = d.event_id
@@ -166,7 +167,7 @@ func (s *DeliveryStore) LoadForWorker(ctx context.Context, deliveryID uuid.UUID)
 		&wd.Delivery.Status, &wd.Delivery.AttemptCount,
 		&wd.Delivery.NextAttemptAt, &wd.Delivery.InFlightLeaseUntil,
 		&wd.Delivery.CreatedAt, &wd.Delivery.UpdatedAt,
-		&wd.EndpointURL, &wd.Payload,
+		&wd.EndpointURL, &wd.SigningSecret, &wd.Payload,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -254,6 +255,19 @@ func (s *DeliveryStore) ResurrectExpiredLeases(ctx context.Context) (int, error)
 	tag, err := s.pool.Exec(ctx, q)
 	if err != nil {
 		return 0, fmt.Errorf("resurrect expired leases: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
+}
+
+// PurgeExpiredIdempotencyRecords deletes idempotency_records whose window has
+// elapsed. Strict < (not <=) preserves records at the exact 24-hour boundary
+// per FR-009 ("expires_at >= NOW() → still within window").
+// Returns the number of rows deleted.
+func (s *DeliveryStore) PurgeExpiredIdempotencyRecords(ctx context.Context) (int, error) {
+	const q = `DELETE FROM idempotency_records WHERE expires_at < NOW()`
+	tag, err := s.pool.Exec(ctx, q)
+	if err != nil {
+		return 0, fmt.Errorf("purge idempotency records: %w", err)
 	}
 	return int(tag.RowsAffected()), nil
 }

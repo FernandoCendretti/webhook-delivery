@@ -13,9 +13,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -44,6 +41,7 @@ func setupAPI(t *testing.T) (http.Handler, *pgxpool.Pool) {
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
 				WithStartupTimeout(60*time.Second),
+			wait.ForListeningPort("5432/tcp").WithStartupTimeout(30*time.Second),
 		),
 	)
 	if err != nil {
@@ -73,23 +71,16 @@ func setupAPI(t *testing.T) (http.Handler, *pgxpool.Pool) {
 	return s.Mux(), pool
 }
 
-// loadMigrationUp extracts the Up section of 001_init.sql, stripping the goose
-// pragmas so it can be exec'd directly against the test database.
+// loadMigrationUp returns the combined Up SQL for all three migrations,
+// suitable for direct execution against a test database.
 func loadMigrationUp(t *testing.T) string {
 	t.Helper()
-	_, file, _, _ := runtime.Caller(0)
-	repoRoot := filepath.Join(filepath.Dir(file), "..", "..")
-	raw, err := os.ReadFile(filepath.Join(repoRoot, "internal/store/migrations/001_init.sql"))
-	if err != nil {
-		t.Fatalf("read migration: %v", err)
+	names := []string{"001_init.sql", "002_signing_secret.sql", "003_idempotency.sql"}
+	var combined string
+	for _, name := range names {
+		combined += loadMigrationFile(t, name) + "\n"
 	}
-	s := string(raw)
-	upIdx := strings.Index(s, "-- +goose Up")
-	downIdx := strings.Index(s, "-- +goose Down")
-	if upIdx < 0 || downIdx < 0 {
-		t.Fatal("goose Up/Down markers not found in migration")
-	}
-	return s[upIdx:downIdx]
+	return combined
 }
 
 func TestEndpointsAPI_Register_Valid(t *testing.T) {
@@ -154,7 +145,7 @@ func TestEndpointsAPI_Get_Existing(t *testing.T) {
 	ctx := context.Background()
 	var id uuid.UUID
 	err := pool.QueryRow(ctx,
-		`INSERT INTO endpoints (url) VALUES ($1) RETURNING id`,
+		`INSERT INTO endpoints (url, signing_secret) VALUES ($1, gen_random_bytes(32)) RETURNING id`,
 		"https://example.com/seeded").Scan(&id)
 	if err != nil {
 		t.Fatalf("seed endpoint: %v", err)

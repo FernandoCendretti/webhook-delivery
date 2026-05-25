@@ -9,14 +9,15 @@ import (
 	"github.com/FernandoCendretti/webhook-delivery/internal/observability"
 )
 
-// leaseResurrector is the subset of DeliveryStore used by the Reaper.
-type leaseResurrector interface {
+// reaperStore is the subset of DeliveryStore used by the Reaper.
+type reaperStore interface {
 	ResurrectExpiredLeases(ctx context.Context) (int, error)
+	PurgeExpiredIdempotencyRecords(ctx context.Context) (int, error)
 }
 
 // Config holds the dependencies and tuning parameters for a Reaper.
 type Config struct {
-	Store    leaseResurrector
+	Store    reaperStore
 	Interval time.Duration
 	Metrics  *observability.Metrics
 	Logger   *slog.Logger
@@ -39,7 +40,8 @@ func New(cfg Config) *Reaper {
 	return &Reaper{cfg: cfg}
 }
 
-// Tick runs one reaper pass: resurrects all expired in_flight deliveries.
+// Tick runs one reaper pass: resurrects all expired in_flight deliveries and
+// purges expired idempotency records.
 func (r *Reaper) Tick(ctx context.Context) error {
 	n, err := r.cfg.Store.ResurrectExpiredLeases(ctx)
 	if err != nil {
@@ -50,6 +52,14 @@ func (r *Reaper) Tick(ctx context.Context) error {
 		if r.cfg.Metrics != nil {
 			r.cfg.Metrics.DeliveryLeaseResurrected.Add(float64(n))
 		}
+	}
+
+	purged, err := r.cfg.Store.PurgeExpiredIdempotencyRecords(ctx)
+	if err != nil {
+		return fmt.Errorf("reaper tick purge: %w", err)
+	}
+	if purged > 0 {
+		r.cfg.Logger.InfoContext(ctx, "reaper purged idempotency records", "count", purged)
 	}
 	return nil
 }

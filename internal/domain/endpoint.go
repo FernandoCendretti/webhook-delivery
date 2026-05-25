@@ -15,9 +15,10 @@ var ErrInvalidURL = errors.New("invalid endpoint url")
 
 // Endpoint represents a registered webhook target URL.
 type Endpoint struct {
-	ID        uuid.UUID
-	URL       string
-	CreatedAt time.Time
+	ID            uuid.UUID
+	URL           string
+	CreatedAt     time.Time
+	SigningSecret []byte // non-nil only when returned by Insert or explicit secret fetch
 }
 
 // ValidateURL checks that rawURL is non-empty, within 2048 chars, and uses the

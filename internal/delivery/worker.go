@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +16,7 @@ import (
 	"github.com/FernandoCendretti/webhook-delivery/internal/domain"
 	"github.com/FernandoCendretti/webhook-delivery/internal/observability"
 	"github.com/FernandoCendretti/webhook-delivery/internal/queue"
+	"github.com/FernandoCendretti/webhook-delivery/internal/signing"
 	"github.com/FernandoCendretti/webhook-delivery/internal/store"
 )
 
@@ -102,7 +104,7 @@ func (w *Worker) process(ctx context.Context, deliveryID uuid.UUID) error {
 	}
 
 	startedAt := time.Now()
-	resp, httpErr := w.doHTTP(ctx, wd.EndpointURL, wd.Payload)
+	resp, httpErr := w.doHTTP(ctx, wd.EndpointURL, wd.Payload, wd.SigningSecret)
 	elapsed := time.Since(startedAt)
 
 	outcome := Classify(resp, httpErr)
@@ -154,12 +156,16 @@ func (w *Worker) process(ctx context.Context, deliveryID uuid.UUID) error {
 	}
 }
 
-func (w *Worker) doHTTP(ctx context.Context, url string, payload []byte) (*http.Response, error) {
+func (w *Worker) doHTTP(ctx context.Context, url string, payload []byte, signingSecret []byte) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
 	}
+	ts := time.Now().Unix()
+	sig := signing.Sign(signingSecret, ts, payload)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Webhook-Timestamp", strconv.FormatInt(ts, 10))
+	req.Header.Set("X-Webhook-Signature", sig)
 	return w.cfg.HTTPClient.Do(req)
 }
 

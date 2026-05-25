@@ -13,6 +13,14 @@ ifeq ($(strip $(DATABASE_URL)),)
 DATABASE_URL := postgres://webhookd:webhookd@localhost:5432/webhookd?sslmode=disable
 endif
 
+# Testcontainers variables for Colima on macOS.
+# DOCKER_HOST points to Colima's socket; TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE tells
+# the RYUK reaper to bind-mount /var/run/docker.sock (the VM-internal path) instead
+# of the macOS host path, which cannot be mounted inside a Linux container.
+DOCKER_HOST ?= unix:///$(HOME)/.colima/default/docker.sock
+TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE ?= /var/run/docker.sock
+export DOCKER_HOST TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE
+
 lint:
 	golangci-lint run ./...
 
@@ -20,7 +28,7 @@ test:
 	go test -race -short ./...
 
 test-integration:
-	go test -race -tags integration ./tests/integration/...
+	go test -race -tags integration -timeout 10m ./tests/integration/...
 
 build:
 	go build -o bin/webhookd ./cmd/webhookd

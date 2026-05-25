@@ -43,6 +43,32 @@ Feature numbering: prefix the folder with `NNN-` (e.g. `001-receive-deliver`, `0
 - Use code blocks only when needed; avoid emojis in artifacts.
 - After updating a spec/plan/tasks file, show only the conceptual diff or the relevant sections — the user can read the file.
 
+## Running integration tests (Colima on macOS)
+
+Integration tests use testcontainers-go (Postgres + Kafka containers). Two environment
+variables are required for the test runner to work correctly under Colima:
+
+```bash
+DOCKER_HOST=unix://$HOME/.colima/default/docker.sock
+TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
+```
+
+The Makefile already exports both with the right defaults. Use `make test-integration`
+for the full suite, or pass `-run <TestName>` via the Go command directly.
+
+**Never use `TESTCONTAINERS_RYUK_DISABLED=true`.** That disables the RYUK cleanup
+daemon and causes containers to become orphaned after a test timeout or Ctrl+C.
+If you find orphaned containers blocking port 9092, run:
+
+```bash
+DOCKER_HOST=unix://$HOME/.colima/default/docker.sock docker ps   # inspect
+DOCKER_HOST=unix://$HOME/.colima/default/docker.sock docker rm -f $(docker ps -q)  # nuke all
+```
+
+**Kafka port binding:** Kafka containers are bound to a fixed host port 9092 via
+`HostConfigModifier` in `tests/integration/helpers_test.go`. Do not change this to a
+random port — the advertised listener `PLAINTEXT://localhost:9092` would stop matching.
+
 ## What NOT to do in this repository
 
 - Do not write production code outside the SDD flow.

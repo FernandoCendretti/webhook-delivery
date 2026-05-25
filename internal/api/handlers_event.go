@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -15,7 +16,7 @@ import (
 
 // eventSubmitter is the service interface consumed by the event handler.
 type eventSubmitter interface {
-	Submit(ctx context.Context, endpointID uuid.UUID, payload json.RawMessage) (*domain.Delivery, error)
+	Submit(ctx context.Context, endpointID uuid.UUID, payload json.RawMessage, idempotencyKey string, rawBody []byte) (*domain.Delivery, error)
 }
 
 type eventHandler struct {
@@ -41,8 +42,8 @@ func newEventHandlerWithMetrics(svc eventSubmitter, log *slog.Logger, m *observa
 func (h *eventHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
 
-	var req EventRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	rawBody, err := io.ReadAll(r.Body)
+	if err != nil {
 		var maxBytes *http.MaxBytesError
 		if errors.As(err, &maxBytes) {
 			if h.metrics != nil {
@@ -51,6 +52,12 @@ func (h *eventHandler) Submit(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusRequestEntityTooLarge, "payload_too_large", "request body exceeds 1 MiB")
 			return
 		}
+		writeError(w, http.StatusBadRequest, "bad_request", "failed to read body")
+		return
+	}
+
+	var req EventRequest
+	if err := json.Unmarshal(rawBody, &req); err != nil {
 		if h.metrics != nil {
 			h.metrics.EventsRejected.WithLabelValues("bad_request").Inc()
 		}
@@ -58,13 +65,27 @@ func (h *eventHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	d, err := h.svc.Submit(r.Context(), req.EndpointID, req.Payload)
+	// Distinguish "header absent" from "header present but empty". Using the map
+	// directly is necessary because Header.Get("X") returns "" for both cases.
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	if _, present := r.Header["Idempotency-Key"]; present {
+		if err := validateIdempotencyKey(idempotencyKey); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_idempotency_key", err.Error())
+			return
+		}
+	}
+
+	d, err := h.svc.Submit(r.Context(), req.EndpointID, req.Payload, idempotencyKey, rawBody)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			if h.metrics != nil {
 				h.metrics.EventsRejected.WithLabelValues("endpoint_not_found").Inc()
 			}
 			writeError(w, http.StatusNotFound, "endpoint_not_found", "")
+			return
+		}
+		if errors.Is(err, domain.ErrConflict) {
+			writeError(w, http.StatusConflict, "idempotency_conflict", "payload hash differs from original submission")
 			return
 		}
 		h.log.ErrorContext(r.Context(), "submit event failed", "err", err)
@@ -79,4 +100,19 @@ func (h *eventHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		DeliveryID: d.ID,
 		EventID:    d.EventID,
 	})
+}
+
+// validateIdempotencyKey checks that key is 1–255 bytes of printable ASCII
+// (bytes in [0x21, 0x7E] inclusive).
+func validateIdempotencyKey(key string) error {
+	if len(key) == 0 || len(key) > 255 {
+		return errors.New("Idempotency-Key must be 1-255 printable ASCII characters")
+	}
+	for i := range len(key) {
+		b := key[i]
+		if b < 0x21 || b > 0x7E {
+			return errors.New("Idempotency-Key contains invalid character")
+		}
+	}
+	return nil
 }

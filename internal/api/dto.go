@@ -26,7 +26,8 @@ func (r EndpointRequest) ToDomain() domain.Endpoint {
 	return domain.Endpoint{URL: r.URL}
 }
 
-// EndpointResponse is the JSON body returned for endpoint read/create operations.
+// EndpointResponse is the JSON body returned for read operations (GET).
+// signing_secret is intentionally absent (FR-002, SC-005).
 type EndpointResponse struct {
 	ID        uuid.UUID `json:"id"`
 	URL       string    `json:"url"`
@@ -35,11 +36,21 @@ type EndpointResponse struct {
 
 // NewEndpointResponse builds an EndpointResponse from a domain.Endpoint.
 func NewEndpointResponse(e domain.Endpoint) EndpointResponse {
-	return EndpointResponse{
-		ID:        e.ID,
-		URL:       e.URL,
-		CreatedAt: e.CreatedAt,
-	}
+	return EndpointResponse{ID: e.ID, URL: e.URL, CreatedAt: e.CreatedAt}
+}
+
+// EndpointCreatedResponse is the JSON body returned on 201 Created.
+// It includes signing_secret once — the only time the caller can obtain it.
+type EndpointCreatedResponse struct {
+	ID            uuid.UUID `json:"id"`
+	URL           string    `json:"url"`
+	CreatedAt     time.Time `json:"created_at"`
+	SigningSecret string    `json:"signing_secret"`
+}
+
+// RotateSecretResponse is the JSON body returned by POST …/rotate-secret.
+type RotateSecretResponse struct {
+	SigningSecret string `json:"signing_secret"`
 }
 
 // EventRequest is the body for POST /v1/events.
