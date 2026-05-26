@@ -1,0 +1,24 @@
+specs/003-order-circuit-breaker/plan.md
+  s_13b4a15a47d508::t_c8d08a6a4d73c5 1-86,90-108,118-126,131-530,540-708,718-736,739-783
+  s_13b4a15a47d508::t_73d8c17868f892 87-89
+  s_13b4a15a47d508::t_7110419f0cb9f8 531-539
+  s_13b4a15a47d508::t_8f81d0ac73c31b 709-717
+  s_13b4a15a47d508::t_540787d21b9e0b 109-117,127-130
+  s_13b4a15a47d508::t_eae374d96d891d 737-738
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "5f9e31a9af021a70bb609872162ffd54edd02d87",
+  "prompts": {},
+  "sessions": {
+    "s_13b4a15a47d508": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "48b8fd66-d0cc-43d6-8431-c4244e31bd9e",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
