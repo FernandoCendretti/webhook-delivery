@@ -1,0 +1,21 @@
+specs/003-order-circuit-breaker/plan.md
+  s_13b4a15a47d508::t_f97109d61b8b14 778-783
+specs/003-order-circuit-breaker/spec.md
+  s_13b4a15a47d508::t_0b8877809cd36f 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "03c6dbf8d03e559220197b7dd46247a005daa739",
+  "prompts": {},
+  "sessions": {
+    "s_13b4a15a47d508": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "48b8fd66-d0cc-43d6-8431-c4244e31bd9e",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
