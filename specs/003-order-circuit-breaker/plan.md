@@ -775,9 +775,9 @@ None. All open items from the spec were resolved before this plan was written.
 
 ## Review Checklist
 
-- [ ] Every FR from spec has a clear implementation path in this plan
-- [ ] Every SC from spec has a way to be measured post-implementation
-- [ ] Error scenarios from spec are covered, not only the happy path
-- [ ] Library choices are justified (not just "I know this one")
-- [ ] Testing strategy covers the spec's acceptance scenarios
-- [ ] No `[NEEDS CLARIFICATION]` markers remain
+- [x] Every FR from spec has a clear implementation path in this plan
+- [x] Every SC from spec has a way to be measured post-implementation
+- [x] Error scenarios from spec are covered, not only the happy path
+- [x] Library choices are justified (not just "I know this one")
+- [x] Testing strategy covers the spec's acceptance scenarios
+- [x] No `[NEEDS CLARIFICATION]` markers remain

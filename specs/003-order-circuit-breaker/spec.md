@@ -6,7 +6,7 @@
 # Feature Specification: Order & Circuit Breaker
 
 **Created**: 2026-05-25
-**Status**: Draft
+**Status**: Approved
 **Input**: User description: "Per-tenant ordering and circuit breaker for webhook delivery"
 
 ## User Scenarios & Testing *(mandatory)*
