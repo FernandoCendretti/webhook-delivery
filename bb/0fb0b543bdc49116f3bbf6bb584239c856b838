@@ -1,0 +1,36 @@
+internal/domain/tenant.go
+  s_aab72e8c3e1bb4::t_a89f6be59c2221 1-15
+internal/store/migrations/005_tenant_columns.sql
+  s_aab72e8c3e1bb4::t_6732fde643ce1a 1-53
+specs/003-order-circuit-breaker/tasks.md
+  s_aab72e8c3e1bb4::t_5b02bcbe25cb9f 35
+  s_aab72e8c3e1bb4::t_7d5b1fa40d4f21 61
+  s_aab72e8c3e1bb4::t_32357bde573356 66
+  s_aab72e8c3e1bb4::t_b40f9c858a3e75 31
+  s_aab72e8c3e1bb4::t_ad88ee51d9ed84 41
+  s_aab72e8c3e1bb4::t_0f65869c7dec5c 58
+internal/domain/circuit_breaker.go
+  s_aab72e8c3e1bb4::t_252b7e1d7ffdf0 1-25
+internal/store/migrations/004_tenants.sql
+  s_aab72e8c3e1bb4::t_bfd5842e5a1f63 1-13
+internal/store/migrations/006_circuit_breaker.sql
+  s_aab72e8c3e1bb4::t_d7becea08ca797 1-29
+internal/config/config.go
+  s_aab72e8c3e1bb4::t_551ecd601774f4 104-116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "bb0fb0b543bdc49116f3bbf6bb584239c856b838",
+  "prompts": {},
+  "sessions": {
+    "s_aab72e8c3e1bb4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e50e32ba-3795-4452-a286-08dfd75005ac",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
