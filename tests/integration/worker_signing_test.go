@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/FernandoCendretti/webhook-delivery/internal/domain"
 	"github.com/FernandoCendretti/webhook-delivery/internal/service"
 	"github.com/FernandoCendretti/webhook-delivery/internal/signing"
@@ -43,7 +45,7 @@ func TestWorkerSigning_HeadersPresentAndValid(t *testing.T) {
 	t.Cleanup(receiver.Close)
 
 	endpointSvc := service.NewEndpointService(store.NewEndpointStore(pool))
-	ep, err := endpointSvc.Register(ctx, receiver.URL)
+	ep, err := endpointSvc.Register(ctx, receiver.URL, uuid.MustParse(systemDefaultTenantID))
 	if err != nil {
 		t.Fatalf("register endpoint: %v", err)
 	}
@@ -121,7 +123,7 @@ func TestWorkerSigning_RetryHasNewTimestamp(t *testing.T) {
 	t.Cleanup(receiver.Close)
 
 	endpointSvc := service.NewEndpointService(store.NewEndpointStore(pool))
-	ep, err := endpointSvc.Register(ctx, receiver.URL)
+	ep, err := endpointSvc.Register(ctx, receiver.URL, uuid.MustParse(systemDefaultTenantID))
 	if err != nil {
 		t.Fatalf("register endpoint: %v", err)
 	}
@@ -188,7 +190,7 @@ func TestWorkerSigning_EmptyPayload(t *testing.T) {
 	t.Cleanup(receiver.Close)
 
 	endpointSvc := service.NewEndpointService(store.NewEndpointStore(pool))
-	ep, err := endpointSvc.Register(ctx, receiver.URL)
+	ep, err := endpointSvc.Register(ctx, receiver.URL, uuid.MustParse(systemDefaultTenantID))
 	if err != nil {
 		t.Fatalf("register endpoint: %v", err)
 	}

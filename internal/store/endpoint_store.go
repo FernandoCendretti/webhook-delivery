@@ -23,14 +23,14 @@ func NewEndpointStore(pool *pgxpool.Pool) *EndpointStore {
 }
 
 // Insert persists e and fills the database-generated ID, CreatedAt, and the
-// echoed SigningSecret fields in place. The caller must set e.SigningSecret
-// before calling; the store stores it as raw bytes.
+// echoed SigningSecret fields in place. The caller must set e.URL, e.TenantID,
+// and e.SigningSecret before calling.
 func (s *EndpointStore) Insert(ctx context.Context, e *domain.Endpoint) error {
 	const q = `
-		INSERT INTO endpoints (url, signing_secret) VALUES ($1, $2)
-		RETURNING id, created_at, signing_secret`
-	if err := s.pool.QueryRow(ctx, q, e.URL, e.SigningSecret).
-		Scan(&e.ID, &e.CreatedAt, &e.SigningSecret); err != nil {
+		INSERT INTO endpoints (url, tenant_id, signing_secret) VALUES ($1, $2, $3)
+		RETURNING id, tenant_id, created_at, signing_secret`
+	if err := s.pool.QueryRow(ctx, q, e.URL, e.TenantID, e.SigningSecret).
+		Scan(&e.ID, &e.TenantID, &e.CreatedAt, &e.SigningSecret); err != nil {
 		return fmt.Errorf("insert endpoint: %w", err)
 	}
 	return nil
@@ -39,9 +39,9 @@ func (s *EndpointStore) Insert(ctx context.Context, e *domain.Endpoint) error {
 // GetByID returns the endpoint with the given id, or domain.ErrNotFound if
 // no such row exists. signing_secret is intentionally excluded (FR-002).
 func (s *EndpointStore) GetByID(ctx context.Context, id uuid.UUID) (*domain.Endpoint, error) {
-	const q = `SELECT id, url, created_at FROM endpoints WHERE id = $1`
+	const q = `SELECT id, url, tenant_id, created_at FROM endpoints WHERE id = $1`
 	var e domain.Endpoint
-	if err := s.pool.QueryRow(ctx, q, id).Scan(&e.ID, &e.URL, &e.CreatedAt); err != nil {
+	if err := s.pool.QueryRow(ctx, q, id).Scan(&e.ID, &e.URL, &e.TenantID, &e.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrNotFound
 		}

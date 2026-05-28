@@ -126,7 +126,8 @@ func runAPI(ctx context.Context, args []string) error {
 	}
 	defer pool.Close()
 
-	endpointSvc := service.NewEndpointService(store.NewEndpointStore(pool))
+	tenantSvc := service.NewTenantService(store.NewTenantStore(pool))
+	endpointSvc := service.NewEndpointService(store.NewEndpointStore(pool), tenantSvc)
 	eventSvc := service.NewEventService(pool, endpointSvc)
 	deliveryStore := store.NewDeliveryStore(pool)
 	deliverySvc := service.NewDeliveryService(deliveryStore)
@@ -137,6 +138,7 @@ func runAPI(ctx context.Context, args []string) error {
 		Logger:      logger,
 		Metrics:     metrics,
 	})
+	s.RegisterTenants(tenantSvc)
 	s.RegisterEndpoints(endpointSvc)
 	s.RegisterEvents(eventSvc)
 	s.RegisterDeliveries(deliverySvc)

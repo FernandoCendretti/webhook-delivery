@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/FernandoCendretti/webhook-delivery/internal/domain"
 	"github.com/FernandoCendretti/webhook-delivery/internal/service"
 	"github.com/FernandoCendretti/webhook-delivery/internal/signing"
@@ -39,7 +41,7 @@ func TestE2E_SigningAndIdempotency(t *testing.T) {
 
 	// Register endpoint and capture signing secret.
 	endpointSvc := service.NewEndpointService(store.NewEndpointStore(pool))
-	ep, err := endpointSvc.Register(ctx, receiver.URL)
+	ep, err := endpointSvc.Register(ctx, receiver.URL, uuid.MustParse(systemDefaultTenantID))
 	if err != nil {
 		t.Fatalf("register endpoint: %v", err)
 	}

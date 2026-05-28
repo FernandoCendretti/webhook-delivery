@@ -67,17 +67,20 @@ func setupAPI(t *testing.T) (http.Handler, *pgxpool.Pool) {
 		APIAddr: ":0",
 		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
-	s.RegisterEndpoints(service.NewEndpointService(store.NewEndpointStore(pool)))
+	tenantStore := store.NewTenantStore(pool)
+	tenantSvc := service.NewTenantService(tenantStore)
+	endpointSvc := service.NewEndpointService(store.NewEndpointStore(pool), tenantSvc)
+	s.RegisterTenants(tenantSvc)
+	s.RegisterEndpoints(endpointSvc)
 	return s.Mux(), pool
 }
 
-// loadMigrationUp returns the combined Up SQL for all three migrations,
+// loadMigrationUp returns the combined Up SQL for all six migrations,
 // suitable for direct execution against a test database.
 func loadMigrationUp(t *testing.T) string {
 	t.Helper()
-	names := []string{"001_init.sql", "002_signing_secret.sql", "003_idempotency.sql"}
 	var combined string
-	for _, name := range names {
+	for _, name := range allMigrations {
 		combined += loadMigrationFile(t, name) + "\n"
 	}
 	return combined
@@ -88,8 +91,21 @@ func TestEndpointsAPI_Register_Valid(t *testing.T) {
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
-	res, err := http.Post(ts.URL+"/v1/endpoints", "application/json",
-		strings.NewReader(`{"url":"https://example.com/webhook"}`))
+	// Create a tenant first (required by FR-007).
+	tenantRes, err := http.Post(ts.URL+"/v1/tenants", "application/json", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("POST /v1/tenants: %v", err)
+	}
+	var tenant struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(tenantRes.Body).Decode(&tenant); err != nil {
+		t.Fatalf("decode tenant: %v", err)
+	}
+	tenantRes.Body.Close()
+
+	body := `{"url":"https://example.com/webhook","tenant_id":"` + tenant.ID + `"}`
+	res, err := http.Post(ts.URL+"/v1/endpoints", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatalf("POST /v1/endpoints: %v", err)
 	}
@@ -103,6 +119,7 @@ func TestEndpointsAPI_Register_Valid(t *testing.T) {
 	var resp struct {
 		ID        string `json:"id"`
 		URL       string `json:"url"`
+		TenantID  string `json:"tenant_id"`
 		CreatedAt string `json:"created_at"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
@@ -113,6 +130,9 @@ func TestEndpointsAPI_Register_Valid(t *testing.T) {
 	}
 	if resp.URL != "https://example.com/webhook" {
 		t.Errorf("url: got %q, want %q", resp.URL, "https://example.com/webhook")
+	}
+	if resp.TenantID != tenant.ID {
+		t.Errorf("tenant_id: got %q, want %q", resp.TenantID, tenant.ID)
 	}
 	if resp.CreatedAt == "" {
 		t.Error("created_at is empty")
@@ -143,10 +163,12 @@ func TestEndpointsAPI_Get_Existing(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	ctx := context.Background()
+	// Migration 005 inserts system-default-tenant; use it for direct SQL seeds.
+	const systemTenant = "00000000-0000-0000-0000-000000000001"
 	var id uuid.UUID
 	err := pool.QueryRow(ctx,
-		`INSERT INTO endpoints (url, signing_secret) VALUES ($1, gen_random_bytes(32)) RETURNING id`,
-		"https://example.com/seeded").Scan(&id)
+		`INSERT INTO endpoints (url, signing_secret, tenant_id) VALUES ($1, gen_random_bytes(32), $2) RETURNING id`,
+		"https://example.com/seeded", systemTenant).Scan(&id)
 	if err != nil {
 		t.Fatalf("seed endpoint: %v", err)
 	}

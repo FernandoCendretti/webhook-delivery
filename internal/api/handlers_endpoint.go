@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -13,30 +14,46 @@ import (
 	"github.com/FernandoCendretti/webhook-delivery/internal/service"
 )
 
+// endpointSvc is the service interface consumed by endpointHandler.
+type endpointSvc interface {
+	Register(ctx context.Context, url string, tenantID uuid.UUID) (*domain.Endpoint, error)
+	Get(ctx context.Context, id uuid.UUID) (*domain.Endpoint, error)
+	RotateSecret(ctx context.Context, id uuid.UUID) ([]byte, error)
+}
+
 type endpointHandler struct {
-	svc *service.EndpointService
+	svc endpointSvc
 	log *slog.Logger
 }
 
-func newEndpointHandler(svc *service.EndpointService, log *slog.Logger) *endpointHandler {
+func newEndpointHandler(svc endpointSvc, log *slog.Logger) *endpointHandler {
 	if log == nil {
 		log = slog.Default()
 	}
 	return &endpointHandler{svc: svc, log: log}
 }
 
-// Create handles POST /v1/endpoints. The 201 response includes signing_secret
-// as a hex string — the only time it is exposed (FR-001).
+// Create handles POST /v1/endpoints. Requires tenant_id in the body (FR-007).
+// The 201 response includes signing_secret as a hex string — the only time it is
+// exposed (FR-001).
 func (h *endpointHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req EndpointRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", "malformed JSON body")
 		return
 	}
-	e, err := h.svc.Register(r.Context(), req.URL)
+	if req.TenantID == nil {
+		writeError(w, http.StatusBadRequest, "missing_tenant_id", "")
+		return
+	}
+	e, err := h.svc.Register(r.Context(), req.URL, *req.TenantID)
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidURL) {
 			writeError(w, http.StatusBadRequest, "invalid_url", err.Error())
+			return
+		}
+		if errors.Is(err, service.ErrTenantNotFound) {
+			writeError(w, http.StatusUnprocessableEntity, "tenant_not_found", "")
 			return
 		}
 		h.log.ErrorContext(r.Context(), "register endpoint failed", "err", err)
@@ -46,6 +63,7 @@ func (h *endpointHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, EndpointCreatedResponse{
 		ID:            e.ID,
 		URL:           e.URL,
+		TenantID:      e.TenantID,
 		CreatedAt:     e.CreatedAt,
 		SigningSecret: hex.EncodeToString(e.SigningSecret),
 	})
@@ -73,8 +91,7 @@ func (h *endpointHandler) RotateSecret(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Get handles GET /v1/endpoints/{id}. A malformed UUID in the path collapses
-// to 404 — a non-UUID id cannot match any stored endpoint.
+// Get handles GET /v1/endpoints/{id}.
 func (h *endpointHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {

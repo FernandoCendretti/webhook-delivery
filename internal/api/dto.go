@@ -15,15 +15,29 @@ type ErrorResponse struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-// EndpointRequest is the body for POST /v1/endpoints.
-type EndpointRequest struct {
-	URL string `json:"url"`
+// CreateTenantRequest is the body for POST /v1/tenants.
+// Name is optional; absent and null are equivalent (treated as no name).
+type CreateTenantRequest struct {
+	Name *string `json:"name"`
 }
 
-// ToDomain produces the partial domain.Endpoint carrying the user-supplied
-// fields. ID and CreatedAt are populated downstream by the store.
-func (r EndpointRequest) ToDomain() domain.Endpoint {
-	return domain.Endpoint{URL: r.URL}
+// TenantResponse is the JSON body for POST /v1/tenants (201) and GET /v1/tenants/{id} (200).
+// Name is omitted from the response when the tenant has no name.
+type TenantResponse struct {
+	ID        uuid.UUID `json:"id"`
+	Name      *string   `json:"name,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// NewTenantResponse builds a TenantResponse from a domain.Tenant.
+func NewTenantResponse(t domain.Tenant) TenantResponse {
+	return TenantResponse{ID: t.ID, Name: t.Name, CreatedAt: t.CreatedAt}
+}
+
+// EndpointRequest is the body for POST /v1/endpoints.
+type EndpointRequest struct {
+	URL      string     `json:"url"`
+	TenantID *uuid.UUID `json:"tenant_id"`
 }
 
 // EndpointResponse is the JSON body returned for read operations (GET).
@@ -31,12 +45,13 @@ func (r EndpointRequest) ToDomain() domain.Endpoint {
 type EndpointResponse struct {
 	ID        uuid.UUID `json:"id"`
 	URL       string    `json:"url"`
+	TenantID  uuid.UUID `json:"tenant_id"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 // NewEndpointResponse builds an EndpointResponse from a domain.Endpoint.
 func NewEndpointResponse(e domain.Endpoint) EndpointResponse {
-	return EndpointResponse{ID: e.ID, URL: e.URL, CreatedAt: e.CreatedAt}
+	return EndpointResponse{ID: e.ID, URL: e.URL, TenantID: e.TenantID, CreatedAt: e.CreatedAt}
 }
 
 // EndpointCreatedResponse is the JSON body returned on 201 Created.
@@ -44,6 +59,7 @@ func NewEndpointResponse(e domain.Endpoint) EndpointResponse {
 type EndpointCreatedResponse struct {
 	ID            uuid.UUID `json:"id"`
 	URL           string    `json:"url"`
+	TenantID      uuid.UUID `json:"tenant_id"`
 	CreatedAt     time.Time `json:"created_at"`
 	SigningSecret string    `json:"signing_secret"`
 }

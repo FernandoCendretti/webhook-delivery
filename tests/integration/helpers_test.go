@@ -31,12 +31,15 @@ import (
 	"github.com/FernandoCendretti/webhook-delivery/internal/store"
 )
 
-// setupFullAPI builds an http.Handler with endpoints, events, and deliveries routes wired.
+// setupFullAPI builds an http.Handler with endpoints, events, deliveries, and
+// tenant routes wired. Requires all six migrations to be applied on pool.
 func setupFullAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := api.NewServer(api.ServerConfig{APIAddr: ":0", Logger: logger})
-	endpointSvc := service.NewEndpointService(store.NewEndpointStore(pool))
+	tenantSvc := service.NewTenantService(store.NewTenantStore(pool))
+	endpointSvc := service.NewEndpointService(store.NewEndpointStore(pool), tenantSvc)
+	s.RegisterTenants(tenantSvc)
 	s.RegisterEndpoints(endpointSvc)
 	s.RegisterEvents(service.NewEventService(pool, endpointSvc))
 	s.RegisterDeliveries(service.NewDeliveryService(store.NewDeliveryStore(pool)))
@@ -197,12 +200,17 @@ func listen() (net.Listener, error) {
 	return net.Listen("tcp", "127.0.0.1:0")
 }
 
+// systemDefaultTenantID is the tenant inserted by migration 005 as a backfill
+// for pre-existing rows. Tests that seed endpoints directly via SQL use this.
+const systemDefaultTenantID = "00000000-0000-0000-0000-000000000001"
+
 // seedEndpoint inserts an endpoint row with a random signing_secret and returns its ID.
+// Uses the system-default tenant so callers do not need to create a tenant first.
 func seedEndpoint(ctx context.Context, pool *pgxpool.Pool, url string) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := pool.QueryRow(ctx,
-		`INSERT INTO endpoints (url, signing_secret) VALUES ($1, gen_random_bytes(32)) RETURNING id`,
-		url).Scan(&id)
+		`INSERT INTO endpoints (url, signing_secret, tenant_id) VALUES ($1, gen_random_bytes(32), $2) RETURNING id`,
+		url, systemDefaultTenantID).Scan(&id)
 	return id, err
 }
 

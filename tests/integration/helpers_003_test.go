@@ -4,11 +4,9 @@ package integration_test
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -17,31 +15,23 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/FernandoCendretti/webhook-delivery/internal/api"
+	"github.com/FernandoCendretti/webhook-delivery/internal/service"
 	"github.com/FernandoCendretti/webhook-delivery/internal/store"
 )
 
-// loadMigrationFile reads a migration file by name from internal/store/migrations/
-// and returns the SQL for the Up section, suitable for direct execution.
-func loadMigrationFile(t *testing.T, filename string) string {
-	t.Helper()
-	_, file, _, _ := runtime.Caller(0)
-	repoRoot := filepath.Join(filepath.Dir(file), "..", "..")
-	raw, err := os.ReadFile(filepath.Join(repoRoot, "internal/store/migrations", filename))
-	if err != nil {
-		t.Fatalf("read migration %s: %v", filename, err)
-	}
-	s := string(raw)
-	upIdx := strings.Index(s, "-- +goose Up")
-	downIdx := strings.Index(s, "-- +goose Down")
-	if upIdx < 0 || downIdx < 0 {
-		t.Fatalf("goose markers not found in %s", filename)
-	}
-	return s[upIdx:downIdx]
+// allMigrations returns the names of all migration files in apply order.
+var allMigrations = []string{
+	"001_init.sql",
+	"002_signing_secret.sql",
+	"003_idempotency.sql",
+	"004_tenants.sql",
+	"005_tenant_columns.sql",
+	"006_circuit_breaker.sql",
 }
 
-// setupSigningPool starts a Postgres container and applies all three migrations.
-// Returns the connection pool.
-func setupSigningPool(t *testing.T) *pgxpool.Pool {
+// setup003Pool starts a Postgres testcontainer and applies all six migrations.
+func setup003Pool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	t.Cleanup(cancel)
@@ -58,13 +48,13 @@ func setupSigningPool(t *testing.T) *pgxpool.Pool {
 		),
 	)
 	if err != nil {
-		t.Fatalf("start postgres: %v", err)
+		t.Fatalf("start postgres container: %v", err)
 	}
 	t.Cleanup(func() { _ = pgCtr.Terminate(context.Background()) })
 
 	connStr, err := pgCtr.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		t.Fatalf("postgres conn string: %v", err)
+		t.Fatalf("postgres connection string: %v", err)
 	}
 	pool, err := store.NewPool(ctx, store.PoolConfig{DatabaseURL: connStr, MaxConns: 10})
 	if err != nil {
@@ -78,14 +68,24 @@ func setupSigningPool(t *testing.T) *pgxpool.Pool {
 			t.Fatalf("apply migration %s: %v", name, err)
 		}
 	}
-
 	return pool
 }
 
-// setupSigningAPIWithPool creates a Postgres container with all three migrations
-// and wires the full HTTP handler (endpoints + events + deliveries).
-func setupSigningAPIWithPool(t *testing.T) (http.Handler, *pgxpool.Pool) {
+// setup003API wires the full API (all routes including tenants) against a pool
+// that has all six migrations applied.
+func setup003API(t *testing.T) (http.Handler, *pgxpool.Pool) {
 	t.Helper()
-	pool := setupSigningPool(t)
-	return setupFullAPI(t, pool), pool
+	pool := setup003Pool(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	s := api.NewServer(api.ServerConfig{APIAddr: ":0", Logger: logger})
+	endpointStore := store.NewEndpointStore(pool)
+	tenantStore := store.NewTenantStore(pool)
+	tenantSvc := service.NewTenantService(tenantStore)
+	endpointSvc := service.NewEndpointService(endpointStore, tenantSvc)
+	s.RegisterTenants(tenantSvc)
+	s.RegisterEndpoints(endpointSvc)
+	s.RegisterEvents(service.NewEventService(pool, endpointSvc))
+	s.RegisterDeliveries(service.NewDeliveryService(store.NewDeliveryStore(pool)))
+	return s.Mux(), pool
 }

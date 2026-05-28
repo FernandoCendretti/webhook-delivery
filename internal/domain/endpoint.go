@@ -17,6 +17,7 @@ var ErrInvalidURL = errors.New("invalid endpoint url")
 type Endpoint struct {
 	ID            uuid.UUID
 	URL           string
+	TenantID      uuid.UUID
 	CreatedAt     time.Time
 	SigningSecret []byte // non-nil only when returned by Insert or explicit secret fetch
 }

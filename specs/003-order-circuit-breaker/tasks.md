@@ -87,16 +87,16 @@ phases depend on tenants existing.
 
 > Write these tests FIRST and confirm they FAIL before any implementation.
 
-- [ ] T007 [P] [US1] Unit tests for tenant name validation in `internal/api/handlers_tenant_test.go`:
+- [x] T007 [P] [US1] Unit tests for tenant name validation in `internal/api/handlers_tenant_test.go`:
       accept 1-char name, 255-char name, absent name (nil), null name; reject empty string → 400,
       256-char name → 400, NUL byte (Cc) → 400, byte 0x01 (Cc) → 400, byte 0x7F DEL (Cc) → 400;
       emoji (not Cc) → accepted
-- [ ] T008 [US1] Integration tests in `tests/integration/api_tenants_test.go` (real Postgres):
+- [x] T008 [US1] Integration tests in `tests/integration/api_tenants_test.go` (real Postgres):
       `POST /v1/tenants` → 201 with UUID and `created_at`; with valid name → name present in
       response; without name → name absent from response; empty string name → 400; 256-char
       name → 400; control char name → 400; `GET /v1/tenants/{id}` → 200 with correct attributes;
       non-existent id → 404; invalid UUID in path → 400
-- [ ] T009 [US1] Integration tests in `tests/integration/api_endpoints_003_test.go` (real Postgres):
+- [x] T009 [US1] Integration tests in `tests/integration/api_endpoints_003_test.go` (real Postgres):
       `POST /v1/endpoints` without `tenant_id` → 400 `missing_tenant_id`;
       with non-existent `tenant_id` → 422 `tenant_not_found`;
       with valid existing `tenant_id` → 201 response includes `tenant_id`;
@@ -106,32 +106,32 @@ phases depend on tenants existing.
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Implement `internal/store/tenant_store.go` — `Insert(ctx, t *domain.Tenant) error`
+- [x] T010 [US1] Implement `internal/store/tenant_store.go` — `Insert(ctx, t *domain.Tenant) error`
       and `GetByID(ctx, id uuid.UUID) (*domain.Tenant, error)`; map `pgx.ErrNoRows` to
       `domain.ErrNotFound`
-- [ ] T011 [P] [US1] Add tenant DTOs to `internal/api/dto.go` — `CreateTenantRequest` with
+- [x] T011 [P] [US1] Add tenant DTOs to `internal/api/dto.go` — `CreateTenantRequest` with
       optional `Name *string`; `TenantResponse` with `ID`, `Name *string` (json `omitempty`),
       `CreatedAt`
-- [ ] T012 [US1] Implement `internal/service/tenant_service.go` — `Create(ctx, name *string)
+- [x] T012 [US1] Implement `internal/service/tenant_service.go` — `Create(ctx, name *string)
       (*domain.Tenant, error)` and `GetByID(ctx, id uuid.UUID) (*domain.Tenant, error)`
       (depends on T010)
-- [ ] T013 [US1] Update `internal/store/endpoint_store.go` — `Insert` includes `tenant_id` in
+- [x] T013 [US1] Update `internal/store/endpoint_store.go` — `Insert` includes `tenant_id` in
       the INSERT statement and returns it in the result; `GetByID` includes `tenant_id` in SELECT
       (depends on T002 migration)
-- [ ] T014 [US1] Update `internal/api/dto.go` — add `TenantID uuid.UUID` (json `tenant_id`)
+- [x] T014 [US1] Update `internal/api/dto.go` — add `TenantID uuid.UUID` (json `tenant_id`)
       to `CreateEndpointRequest`; add `TenantID uuid.UUID` to `EndpointResponse` and
       `EndpointCreatedResponse` (depends on T011)
-- [ ] T015 [US1] Update `internal/service/endpoint_service.go` — `Create(ctx, url string,
+- [x] T015 [US1] Update `internal/service/endpoint_service.go` — `Create(ctx, url string,
       tenantID uuid.UUID)`: validate `tenantID` non-zero; `SELECT id FROM tenants WHERE id=$tenantID`
       inside TX → return error mapped to 422 `tenant_not_found` if absent; pass `tenantID` to
       `endpoint_store.Insert` (depends on T012, T013)
-- [ ] T016 [US1] Update `internal/api/handlers_endpoint.go` — parse mandatory `tenant_id` from
+- [x] T016 [US1] Update `internal/api/handlers_endpoint.go` — parse mandatory `tenant_id` from
       request body → 400 `missing_tenant_id` if absent; pass to `endpoint_service.Create`; map
       tenant-not-found sentinel → 422 `tenant_not_found` (depends on T014, T015)
-- [ ] T017 [US1] Implement `internal/api/handlers_tenant.go` — `Create` handler: parse body,
+- [x] T017 [US1] Implement `internal/api/handlers_tenant.go` — `Create` handler: parse body,
       validate name (unicode.Cc check per FR-002) → 400 `invalid_name` or 201 `TenantResponse`;
       `GetByID` handler: parse + validate UUID → 400 / 200 / 404 (depends on T011, T012)
-- [ ] T018 [US1] Register tenant routes in `internal/api/server.go` —
+- [x] T018 [US1] Register tenant routes in `internal/api/server.go` —
       `POST /v1/tenants → tenantHandler.Create`,
       `GET /v1/tenants/{id} → tenantHandler.GetByID` (depends on T017)
 

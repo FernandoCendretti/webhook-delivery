@@ -73,6 +73,14 @@ func (s *Server) RegisterEvents(svc eventSubmitter) {
 	s.mux.HandleFunc("POST /v1/events", h.Submit)
 }
 
+// RegisterTenants wires the /v1/tenants routes. Must be called once per server
+// before Start.
+func (s *Server) RegisterTenants(svc tenantSvc) {
+	h := newTenantHandler(svc, s.cfg.Logger)
+	s.mux.HandleFunc("POST /v1/tenants", h.Create)
+	s.mux.HandleFunc("GET /v1/tenants/{id}", h.GetByID)
+}
+
 // RegisterDeliveries wires the GET /v1/deliveries/{id} route.
 func (s *Server) RegisterDeliveries(svc deliveryGetter) {
 	h := newDeliveryHandler(svc, s.cfg.Logger)
