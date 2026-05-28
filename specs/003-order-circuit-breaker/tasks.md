@@ -205,7 +205,7 @@ events delivered in submission order.
 
 ### Skeleton (required before tests can compile)
 
-- [ ] T024a [US3] Create `internal/store/circuit_store.go` skeleton — declare all 6 method
+- [x] T024a [US3] Create `internal/store/circuit_store.go` skeleton — declare all 6 method
       signatures with stub bodies that return zero values and no logic (`HandleSuccess`,
       `HandleTransientFailure`, `HandleProbePermanentFailure`, `ProcessExpiredSuspensions`,
       `SetProbeDelivery`, `GetState`); this unblocks T025–T039 test compilation before T040a/T040b
@@ -215,78 +215,78 @@ events delivered in submission order.
 
 > Write these tests FIRST and confirm they FAIL before any implementation.
 
-- [ ] T025 [US3] Unit tests in `internal/store/circuit_store_test.go` — table-driven test
+- [x] T025 [US3] Unit tests in `internal/store/circuit_store_test.go` — table-driven test
       over `(initial_state, sensitive_recovery bool, failure_count, threshold, outcome)`
       tuples for `HandleTransientFailure` and `HandleSuccess`; assert resulting
       `circuit_state`, presence/absence of `suspended_until`, counter value,
       `sensitive_recovery` flag after each transition
-- [ ] T026 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — 5 calls
+- [x] T026 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — 5 calls
       to `HandleTransientFailure` on the same endpoint → `circuit_state='open'`,
       `circuit_failure_count=5`, `circuit_suspended_until` non-null; 6th call is a no-op
       (WHERE clause skips already-open state); `GetState` returns
       `CircuitBreakerInfo{State: CircuitOpen, ConsecutiveFailures: 5, SuspendedUntil: non-nil}`
-- [ ] T027 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — permanent
+- [x] T027 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — permanent
       failure does NOT increment counter (FR-011): 4 `HandleTransientFailure` calls; do NOT
       call `HandleTransientFailure` for the permanent failure (correct worker behaviour);
       call `HandleTransientFailure` one more time → counter = 5, circuit opens; separately
       verify that 4 transient + 1 permanent path leaves counter at 4 (circuit not yet open)
-- [ ] T028 [US3] Integration test in `tests/integration/circuit_breaker_test.go` —
+- [x] T028 [US3] Integration test in `tests/integration/circuit_breaker_test.go` —
       `ProcessExpiredSuspensions` with non-terminal delivery: open endpoint with
       `suspended_until` in the past; non-terminal delivery exists → state transitions to
       `half_open`; subsequent `SetProbeDelivery` sets `circuit_probe_delivery_id`; delivery
       `next_attempt_at` is reset to `NOW()` if it was scheduled in the future
-- [ ] T029 [US3] Integration test in `tests/integration/circuit_breaker_test.go` —
+- [x] T029 [US3] Integration test in `tests/integration/circuit_breaker_test.go` —
       `ProcessExpiredSuspensions` with empty queue (FR-024): open endpoint with
       `suspended_until` in the past; all deliveries are in terminal state → state transitions
       directly to `closed`; `circuit_failure_count = 0`; no probe delivery set
-- [ ] T030 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — scheduler
+- [x] T030 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — scheduler
       crash recovery (Step 0a): force endpoint to `half_open` with `circuit_probe_delivery_id=NULL`
       via SQL (simulates scheduler crash between `ProcessExpiredSuspensions` and
       `SetProbeDelivery`); run scheduler tick; verify `circuit_probe_delivery_id` is populated
       and the delivery is now returned by `ClaimReady`
-- [ ] T031 [US3] Integration test in `tests/integration/circuit_breaker_test.go` —
+- [x] T031 [US3] Integration test in `tests/integration/circuit_breaker_test.go` —
       `SetProbeDelivery` empty-queue race (FR-024 fallback): force endpoint to `half_open`
       via SQL; mark its last non-terminal delivery as `delivered` via SQL before calling
       `SetProbeDelivery`; assert endpoint transitions to `closed` with `circuit_failure_count=0`
-- [ ] T032 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — probe
+- [x] T032 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — probe
       success: endpoint in `half_open`; call `HandleSuccess` → `circuit_state='closed'`,
       `circuit_sensitive_recovery=TRUE`, `circuit_failure_count=0`,
       `circuit_probe_delivery_id=NULL`
-- [ ] T033 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — probe
+- [x] T033 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — probe
       transient failure: endpoint in `half_open`; call `HandleTransientFailure` →
       `circuit_state='open'`, new `circuit_suspended_until`, `circuit_probe_delivery_id=NULL`
       (FR-017)
-- [ ] T034 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — probe
+- [x] T034 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — probe
       permanent failure: endpoint in `half_open`; call `HandleProbePermanentFailure` →
       `circuit_state='open'`, `circuit_suspended_until` set for a new full suspension period
       (FR-018); counter NOT incremented
-- [ ] T035 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — FR-019
+- [x] T035 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — FR-019
       sensitive recovery: set `circuit_sensitive_recovery=TRUE` on a closed endpoint via SQL;
       single call to `HandleTransientFailure` (count+1 = 1, below default threshold of 5) →
       `circuit_state='open'` immediately; `circuit_sensitive_recovery=FALSE` after transition
-- [ ] T036 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — FR-019
+- [x] T036 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — FR-019
       reset: endpoint in `half_open` → `HandleSuccess` → `circuit_sensitive_recovery=TRUE`;
       call `HandleSuccess` again (simulates one subsequent successful delivery) →
       `circuit_sensitive_recovery=FALSE`; verify a single subsequent `HandleTransientFailure`
       does NOT open the circuit (threshold applies normally)
-- [ ] T037 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — restart
+- [x] T037 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — restart
       durability (FR-013, SC-007): open a circuit; close and re-open the pgx pool connection
       (or query from a fresh pool); `GetState` returns `{State: CircuitOpen}` — circuit state
       survives reconnect
-- [ ] T038 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — multi-instance
+- [x] T038 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — multi-instance
       concurrency (SC-008): two goroutines call `HandleTransientFailure` concurrently on the
       same endpoint for the 5th failure; assert `circuit_state='open'` exactly once (no
       double-open); verify via `GetState` that `circuit_failure_count` did not exceed threshold
-- [ ] T039 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — FR-020
+- [x] T039 [US3] Integration test in `tests/integration/circuit_breaker_test.go` — FR-020
       overdue retry: delivery with `next_attempt_at` in the past sits in `scheduled` while
       circuit is open; close the circuit via direct SQL update to `circuit_state='closed'`;
       verify delivery appears in `ClaimReady` results immediately on the next call
-- [ ] T039a [US3] Integration test in `tests/integration/circuit_breaker_test.go` — AS8
+- [x] T039a [US3] Integration test in `tests/integration/circuit_breaker_test.go` — AS8
       cross-tenant circuit isolation: open the circuit on endpoint A (tenant T1) via SQL
       (`circuit_state='open'`); register endpoint B under a different tenant T2 with a
       `scheduled` delivery; call `ClaimReady`; assert endpoint B's delivery IS returned
       (T1's open circuit does NOT block T2's endpoints, FR-009 + FR-014)
-- [ ] T039b [US3] Integration test in `tests/integration/circuit_breaker_test.go` — SC-005
+- [x] T039b [US3] Integration test in `tests/integration/circuit_breaker_test.go` — SC-005
       queue drain: endpoint in `half_open` with probe delivery D1 and two waiting deliveries
       D2, D3; call `HandleSuccess` (probe succeeds) → `circuit_state='closed'`; call
       `ClaimReady` (with ordering filter, D1 now terminal); assert both D2 and D3 appear in
@@ -297,7 +297,7 @@ events delivered in submission order.
 
 ### Implementation for User Story 3
 
-- [ ] T040a [US3] Implement the three outcome handlers in `internal/store/circuit_store.go`
+- [x] T040a [US3] Implement the three outcome handlers in `internal/store/circuit_store.go`
       (replaces the stub bodies from T024a; depends on T005, T006):
       - `HandleSuccess(ctx, endpointID uuid.UUID)`: single conditional UPDATE — resets
         `circuit_failure_count=0`, `circuit_state='closed'`, `circuit_suspended_until=NULL`,
@@ -311,7 +311,7 @@ events delivered in submission order.
       - `HandleProbePermanentFailure(ctx, endpointID uuid.UUID, cfg CircuitConfig)`: UPDATE
         to `open`, set `suspended_until=NOW()+cfg.SuspensionDuration`, clear
         `probe_delivery_id`; WHERE `circuit_state='half_open'`
-- [ ] T040b [US3] Implement the scheduler-side methods in `internal/store/circuit_store.go`
+- [x] T040b [US3] Implement the scheduler-side methods in `internal/store/circuit_store.go`
       (depends on T040a):
       - `ProcessExpiredSuspensions(ctx) (halfOpenIDs []uuid.UUID, closedIDs []uuid.UUID, error)`:
         single UPDATE with CASE — transitions expired open endpoints to `half_open` (when
@@ -326,19 +326,19 @@ events delivered in submission order.
       - `GetState(ctx, endpointID uuid.UUID) (*domain.CircuitBreakerInfo, error)`: SELECT
         `id`, `circuit_state`, `circuit_failure_count`, `circuit_suspended_until`; nil →
         `domain.ErrNotFound`
-- [ ] T041 [US3] Update `ClaimReady` in `internal/store/delivery_store.go` — add circuit
+- [x] T041 [US3] Update `ClaimReady` in `internal/store/delivery_store.go` — add circuit
       breaker eligibility AND condition (builds on ordering NOT EXISTS from T024): eligible if
       `e.circuit_state='closed'` OR (`e.circuit_state='half_open'` AND
       `e.circuit_probe_delivery_id=d.id`); `open` endpoints fully excluded (FR-014)
       (depends on T024, T040a)
-- [ ] T042 [US3] Update `internal/scheduler/scheduler.go` — add Step 0a before existing tick
+- [x] T042 [US3] Update `internal/scheduler/scheduler.go` — add Step 0a before existing tick
       body: `SELECT id FROM endpoints WHERE circuit_state='half_open' AND
       circuit_probe_delivery_id IS NULL` → call `circuit_store.SetProbeDelivery(ctx, id)`
       for each result (scheduler crash guard for orphaned half_open endpoints); add Step 0b:
       call `circuit_store.ProcessExpiredSuspensions(ctx)` → call
       `circuit_store.SetProbeDelivery(ctx, id)` for each `halfOpenID` returned; existing
       claim + Kafka publish logic becomes Step 1 (depends on T040b)
-- [ ] T043 [US3] Update `internal/delivery/worker.go` — after outcome classification, dispatch
+- [x] T043 [US3] Update `internal/delivery/worker.go` — after outcome classification, dispatch
       to circuit store: `OutcomeSuccess` → `circuit_store.HandleSuccess(ctx, endpointID)`;
       `OutcomeTransient/Timeout` → `circuit_store.HandleTransientFailure(ctx, endpointID, cfg)`;
       `OutcomePermanentFailure` AND `wd.EndpointCircuitState == "half_open"` →
@@ -365,7 +365,7 @@ Query `GET /v1/endpoints/{id}/circuit-breaker`. Response includes `state:"open"`
 
 > Write these tests FIRST and confirm they FAIL before any implementation.
 
-- [ ] T044 [US4] Integration tests in `tests/integration/api_circuit_test.go` (real Postgres):
+- [x] T044 [US4] Integration tests in `tests/integration/api_circuit_test.go` (real Postgres):
       closed endpoint → 200 `{state:"closed", consecutive_failures:0}` (no `suspended_until`);
       open endpoint → 200 `{state:"open", consecutive_failures:5, suspended_until:"..."}`;
       half-open endpoint → 200 `{state:"half-open", consecutive_failures:5}` (no `suspended_until`,
@@ -376,18 +376,18 @@ Query `GET /v1/endpoints/{id}/circuit-breaker`. Response includes `state:"open"`
 
 ### Implementation for User Story 4
 
-- [ ] T045 [P] [US4] Add `CircuitBreakerResponse` DTO to `internal/api/dto.go` — fields
+- [x] T045 [P] [US4] Add `CircuitBreakerResponse` DTO to `internal/api/dto.go` — fields
       `EndpointID uuid.UUID`, `State string`, `ConsecutiveFailures int`,
       `SuspendedUntil *time.Time` (json `omitempty`); DTO converts internal `half_open` →
       JSON `"half-open"` and includes `SuspendedUntil` only when state is `open`
       (see plan.md §Flow F)
-- [ ] T046 [US4] Implement `internal/api/handlers_circuit.go` — `GetState` handler for
+- [x] T046 [US4] Implement `internal/api/handlers_circuit.go` — `GetState` handler for
       `GET /v1/endpoints/{id}/circuit-breaker`: parse and validate `{id}` → 400
       `invalid_endpoint_id` if not UUID; call `circuit_store.GetState` → 404
       `endpoint_not_found` if `ErrNotFound`; build `CircuitBreakerResponse` (translate
       `half_open` → `"half-open"`, omit `SuspendedUntil` unless state is `open`); respond 200
       (depends on T040, T045)
-- [ ] T047 [US4] Register circuit-breaker route in `internal/api/server.go` —
+- [x] T047 [US4] Register circuit-breaker route in `internal/api/server.go` —
       `GET /v1/endpoints/{id}/circuit-breaker → circuitHandler.GetState` (depends on T046)
 
 **Checkpoint**: `go test ./tests/integration/...` for T044 passes. All prior tests remain green.

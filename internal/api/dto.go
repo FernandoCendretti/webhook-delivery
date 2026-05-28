@@ -105,6 +105,16 @@ type DeliveryResponse struct {
 	Attempts      []AttemptResponse `json:"attempts"`
 }
 
+// CircuitBreakerResponse is the body for GET /v1/endpoints/{id}/circuit-breaker.
+// SuspendedUntil is omitted unless state is "open". The internal half_open state
+// is rendered as "half-open" (hyphen) in the API.
+type CircuitBreakerResponse struct {
+	EndpointID          uuid.UUID  `json:"endpoint_id"`
+	State               string     `json:"state"`
+	ConsecutiveFailures int        `json:"consecutive_failures"`
+	SuspendedUntil      *time.Time `json:"suspended_until,omitempty"`
+}
+
 // NewDeliveryResponse builds a DeliveryResponse from the domain objects.
 // NextAttemptAt is only included when status is 'scheduled'.
 func NewDeliveryResponse(d domain.Delivery, attempts []domain.Attempt) DeliveryResponse {

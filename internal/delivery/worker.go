@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/FernandoCendretti/webhook-delivery/internal/config"
 	"github.com/FernandoCendretti/webhook-delivery/internal/domain"
 	"github.com/FernandoCendretti/webhook-delivery/internal/observability"
 	"github.com/FernandoCendretti/webhook-delivery/internal/queue"
@@ -32,6 +33,13 @@ type attemptStore interface {
 	UpdateOutcome(ctx context.Context, id uuid.UUID, outcome domain.AttemptOutcome, statusCode *int, errorReason *string) error
 }
 
+// workerCircuitStore is the subset of store.CircuitStore used by the worker.
+type workerCircuitStore interface {
+	HandleSuccess(ctx context.Context, endpointID uuid.UUID) error
+	HandleTransientFailure(ctx context.Context, endpointID uuid.UUID, cfg config.CircuitConfig) error
+	HandleProbePermanentFailure(ctx context.Context, endpointID uuid.UUID, cfg config.CircuitConfig) error
+}
+
 type scheduledMessage struct {
 	DeliveryID uuid.UUID `json:"delivery_id"`
 	EndpointID uuid.UUID `json:"endpoint_id"`
@@ -43,6 +51,8 @@ type WorkerConfig struct {
 	AttemptStore  attemptStore
 	Consumer      *queue.Consumer
 	Pool          *pgxpool.Pool
+	CircuitStore  workerCircuitStore   // optional; when nil circuit-breaker calls are skipped
+	CircuitCfg    config.CircuitConfig // used only when CircuitStore is non-nil
 	HTTPClient    *http.Client
 	Metrics       *observability.Metrics
 	Logger        *slog.Logger
@@ -131,7 +141,31 @@ func (w *Worker) process(ctx context.Context, deliveryID uuid.UUID) error {
 		m.DeliveryAttemptDuration.WithLabelValues(epID).Observe(elapsed.Seconds())
 	}
 
-	// US3: full retry logic.
+	endpointID := wd.Delivery.EndpointID
+
+	// Circuit breaker updates (FR-010–FR-018).
+	if cs := w.cfg.CircuitStore; cs != nil {
+		switch outcome {
+		case domain.OutcomeSuccess:
+			if err := cs.HandleSuccess(ctx, endpointID); err != nil {
+				w.cfg.Logger.WarnContext(ctx, "circuit HandleSuccess", "endpoint", endpointID, "err", err)
+			}
+		case domain.OutcomePermanentFailure:
+			// Permanent failures only update the circuit when the endpoint is in half_open
+			// (probe failure); in closed state the counter is NOT incremented (FR-011).
+			if wd.EndpointCircuitState == "half_open" {
+				if err := cs.HandleProbePermanentFailure(ctx, endpointID, w.cfg.CircuitCfg); err != nil {
+					w.cfg.Logger.WarnContext(ctx, "circuit HandleProbePermanentFailure", "endpoint", endpointID, "err", err)
+				}
+			}
+		default: // transient_failure or timeout
+			if err := cs.HandleTransientFailure(ctx, endpointID, w.cfg.CircuitCfg); err != nil {
+				w.cfg.Logger.WarnContext(ctx, "circuit HandleTransientFailure", "endpoint", endpointID, "err", err)
+			}
+		}
+	}
+
+	// Delivery state transitions.
 	switch outcome {
 	case domain.OutcomeSuccess:
 		if m := w.cfg.Metrics; m != nil {

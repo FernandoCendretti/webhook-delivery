@@ -19,6 +19,13 @@ type deliveryStore interface {
 	ClaimReady(ctx context.Context, batch int, leaseUntil time.Time) ([]domain.Delivery, error)
 }
 
+// circuitStore is the subset of store.CircuitStore used by the scheduler.
+type circuitStore interface {
+	OrphanedHalfOpenEndpoints(ctx context.Context) ([]uuid.UUID, error)
+	ProcessExpiredSuspensions(ctx context.Context) (halfOpenIDs []uuid.UUID, closedIDs []uuid.UUID, err error)
+	SetProbeDelivery(ctx context.Context, endpointID uuid.UUID) error
+}
+
 // kafkaMessage is the payload published to the Kafka delivery topic.
 type kafkaMessage struct {
 	DeliveryID uuid.UUID `json:"delivery_id"`
@@ -28,6 +35,7 @@ type kafkaMessage struct {
 // Config holds the dependencies and tuning parameters for a Scheduler.
 type Config struct {
 	DeliveryStore deliveryStore
+	CircuitStore  circuitStore // optional; when nil circuit-breaker steps are skipped
 	Publisher     *queue.Publisher
 	BatchSize     int
 	LeaseDuration time.Duration
@@ -57,7 +65,35 @@ func New(cfg Config) *Scheduler {
 }
 
 // Tick claims one batch of ready deliveries and publishes each to Kafka.
+// Steps 0a and 0b run first when a CircuitStore is configured.
 func (s *Scheduler) Tick(ctx context.Context) error {
+	if cs := s.cfg.CircuitStore; cs != nil {
+		// Step 0a: recover orphaned half_open endpoints (scheduler crash guard).
+		orphans, err := cs.OrphanedHalfOpenEndpoints(ctx)
+		if err != nil {
+			s.cfg.Logger.WarnContext(ctx, "find orphaned half_open", "err", err)
+		} else {
+			for _, id := range orphans {
+				if err := cs.SetProbeDelivery(ctx, id); err != nil {
+					s.cfg.Logger.WarnContext(ctx, "set probe delivery (recovery)", "endpoint", id, "err", err)
+				}
+			}
+		}
+
+		// Step 0b: transition expired open circuits and assign probes.
+		halfOpenIDs, _, err := cs.ProcessExpiredSuspensions(ctx)
+		if err != nil {
+			s.cfg.Logger.WarnContext(ctx, "process expired suspensions", "err", err)
+		} else {
+			for _, id := range halfOpenIDs {
+				if err := cs.SetProbeDelivery(ctx, id); err != nil {
+					s.cfg.Logger.WarnContext(ctx, "set probe delivery", "endpoint", id, "err", err)
+				}
+			}
+		}
+	}
+
+	// Step 1: claim eligible deliveries and publish to Kafka.
 	leaseUntil := time.Now().Add(s.cfg.LeaseDuration)
 	deliveries, err := s.cfg.DeliveryStore.ClaimReady(ctx, s.cfg.BatchSize, leaseUntil)
 	if err != nil {

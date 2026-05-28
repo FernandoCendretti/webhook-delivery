@@ -87,6 +87,12 @@ func (s *Server) RegisterDeliveries(svc deliveryGetter) {
 	s.mux.HandleFunc("GET /v1/deliveries/{id}", h.Get)
 }
 
+// RegisterCircuitBreaker wires the GET /v1/endpoints/{id}/circuit-breaker route.
+func (s *Server) RegisterCircuitBreaker(store circuitStateGetter) {
+	h := newCircuitHandler(store, s.cfg.Logger)
+	s.mux.HandleFunc("GET /v1/endpoints/{id}/circuit-breaker", h.GetState)
+}
+
 // Start begins listening on the configured addresses and blocks until ctx is
 // cancelled or a server error occurs.
 func (s *Server) Start(ctx context.Context) error {

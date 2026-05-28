@@ -70,8 +70,12 @@ func setupAPI(t *testing.T) (http.Handler, *pgxpool.Pool) {
 	tenantStore := store.NewTenantStore(pool)
 	tenantSvc := service.NewTenantService(tenantStore)
 	endpointSvc := service.NewEndpointService(store.NewEndpointStore(pool), tenantSvc)
+	circuitStore := store.NewCircuitStore(pool)
 	s.RegisterTenants(tenantSvc)
 	s.RegisterEndpoints(endpointSvc)
+	s.RegisterEvents(service.NewEventService(pool, endpointSvc))
+	s.RegisterDeliveries(service.NewDeliveryService(store.NewDeliveryStore(pool)))
+	s.RegisterCircuitBreaker(circuitStore)
 	return s.Mux(), pool
 }
 
