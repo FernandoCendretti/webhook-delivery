@@ -1,0 +1,63 @@
+internal/store/circuit_store.go
+  s_aab72e8c3e1bb4::t_a90116c1cda36c 5-6,9,29-42,47-72,77-86,93-135,141-177,206-221
+  s_aab72e8c3e1bb4::t_8fc472f41c9e41 181-203
+  s_aab72e8c3e1bb4::t_718e1769fe84d7 1-4,7-8,10-28,43-46,73-76,87-92,136-140,178-180,204-205,222
+tests/integration/api_endpoints_test.go
+  s_aab72e8c3e1bb4::t_4583809ab9f80a 73,76-78
+internal/api/server.go
+  s_aab72e8c3e1bb4::t_f3f43209c2d73e 90-95
+internal/api/dto.go
+  s_aab72e8c3e1bb4::t_311d370185d2f2 108-117
+internal/delivery/worker.go
+  s_aab72e8c3e1bb4::t_763c99e38df237 144-168
+  s_aab72e8c3e1bb4::t_cf7ec861f34458 16,36-40
+  s_aab72e8c3e1bb4::t_595de95c9dd91a 54-55
+internal/scheduler/scheduler.go
+  s_aab72e8c3e1bb4::t_4fa0dc38f3cc3e 68,70-96
+  s_aab72e8c3e1bb4::t_3e33cb9f367f77 22-28
+  s_aab72e8c3e1bb4::t_fd26f3219f3de5 38
+internal/api/handlers_circuit.go
+  s_aab72e8c3e1bb4::t_7e51ec5f049e68 1-67
+specs/003-order-circuit-breaker/tasks.md
+  s_aab72e8c3e1bb4::t_41b88abe69093b 334,341
+  s_aab72e8c3e1bb4::t_f1061199fda6b5 300
+  s_aab72e8c3e1bb4::t_314beebaa7d178 223,228,233,238,242,247,251,255,259,263,267,272,276,280,284,289
+  s_aab72e8c3e1bb4::t_a1a030e13c5544 218
+  s_aab72e8c3e1bb4::t_92caca5f0812ee 379,384,390
+  s_aab72e8c3e1bb4::t_eff516efc535dd 314
+  s_aab72e8c3e1bb4::t_6fcbf77fb1f726 368
+  s_aab72e8c3e1bb4::t_c76a71ccbb2dc7 329
+  s_aab72e8c3e1bb4::t_b600f8ccc6dffb 208
+tests/integration/api_circuit_test.go
+  s_aab72e8c3e1bb4::t_721bbc9442e595 63,67
+  s_aab72e8c3e1bb4::t_1e68afaffdac2f 107
+  s_aab72e8c3e1bb4::t_9a843e937d95d2 1-6,8-62,64-66,68-106,108-193
+  s_aab72e8c3e1bb4::t_ea7d7639973cba 7
+tests/integration/circuit_breaker_test.go
+  s_aab72e8c3e1bb4::t_69989f33fdb30d 1-39,42-52,55-110,114-166,168-258,260-301,303-577,579-640,642-666,668,670,672-719
+  s_aab72e8c3e1bb4::t_e24e9ca869f002 167,259,302,578,641,667,669,671
+  s_aab72e8c3e1bb4::t_b4c266aeaef479 40-41,53-54
+  s_aab72e8c3e1bb4::t_aa87f1d223a3ca 111-113
+internal/store/circuit_store_test.go
+  s_aab72e8c3e1bb4::t_13fdb7e3d82789 1-6,8-10,12-355,359-388,392-405,407
+  s_aab72e8c3e1bb4::t_fb9d70d7865e78 406
+  s_aab72e8c3e1bb4::t_5908fa9761817e 356-358,389-391
+  s_aab72e8c3e1bb4::t_b84286d6e35b5b 7
+  s_aab72e8c3e1bb4::t_ddd8c80f7992df 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "baee2c8728d83ed1e103ee73a75866c4cea3a747",
+  "prompts": {},
+  "sessions": {
+    "s_aab72e8c3e1bb4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e50e32ba-3795-4452-a286-08dfd75005ac",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
