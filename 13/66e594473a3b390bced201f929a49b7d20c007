@@ -1,0 +1,65 @@
+tests/integration/sc007_test.go
+  s_aab72e8c3e1bb4::t_b7ec54b291006a 110
+internal/api/handlers_event.go
+  s_aab72e8c3e1bb4::t_6d5c998f97f86d 15,20,42,69-73,82,91-96
+internal/api/handlers_event_test.go
+  s_aab72e8c3e1bb4::t_9890bde2f0c07a 20
+  s_aab72e8c3e1bb4::t_53bd44d2bbac0f 68,70
+tests/integration/api_events_003_test.go
+  s_aab72e8c3e1bb4::t_9944f2de78ea97 89
+  s_aab72e8c3e1bb4::t_a3284e05ffc6ba 1-88,90-157
+tests/integration/endpoint_rotation_test.go
+  s_aab72e8c3e1bb4::t_0f843752092cc3 117,189,286
+  s_aab72e8c3e1bb4::t_f8eeb7149495ed 83,164,272,330
+tests/integration/e2e_signing_idempotency_test.go
+  s_aab72e8c3e1bb4::t_57ef519a5846a6 60,91
+tests/integration/idempotency_test.go
+  s_aab72e8c3e1bb4::t_07b5ba5589c0a5 27
+specs/003-order-circuit-breaker/tasks.md
+  s_aab72e8c3e1bb4::t_b7791e8ed96b0b 176
+  s_aab72e8c3e1bb4::t_ef2d6e7fe389a1 174
+  s_aab72e8c3e1bb4::t_e9e164ba3e4499 157
+  s_aab72e8c3e1bb4::t_e0d43ec954c7d1 181
+  s_aab72e8c3e1bb4::t_a46b8f2e57078c 184
+  s_aab72e8c3e1bb4::t_746f42fecc19f3 162
+tests/integration/ordering_test.go
+  s_aab72e8c3e1bb4::t_d3aa12c352bc02 11,16,18,22-25,38-58,60-64,66-67,69-77,79,85,88,92-93,99-100,112-113,116,120-121,127-128,140-141,145-146,152-155,157-160,163,169-170,175,181-182,184-188,190,196-197,201-202
+  s_aab72e8c3e1bb4::t_57e4daa3eb36d3 1-10,12-15,17,19-21,26-37,59,65,68,78,80-84,86-87,89-91,94-98,101-111,114-115,117-119,122-126,129-139,142-144,147-151,156,161-162,164-168,171-174,176-180,183,189,191-195,198-200
+tests/integration/api_deliveries_test.go
+  s_aab72e8c3e1bb4::t_292d7d5f1e25b1 76-77,87,90
+tests/integration/helpers_test.go
+  s_aab72e8c3e1bb4::t_5e0784fb9d18f9 217-218,221
+tests/integration/api_events_test.go
+  s_aab72e8c3e1bb4::t_afcfa5648e7099 84
+  s_aab72e8c3e1bb4::t_cb47ca61e9debe 30,32,50
+tests/integration/pipeline_test.go
+  s_aab72e8c3e1bb4::t_c6163d1bbff0e5 47-48,54-57,65,70
+internal/store/delivery_store.go
+  s_aab72e8c3e1bb4::t_c459f29a6c055c 60-63,67-76
+  s_aab72e8c3e1bb4::t_048f302432e5da 157-158,160-164,171,183
+tests/integration/scheduler_test.go
+  s_aab72e8c3e1bb4::t_ecf973250fcbdf 82-83
+  s_aab72e8c3e1bb4::t_3c7a9f4a19283e 7,21-38,41-43,46-49
+internal/api/dto.go
+  s_aab72e8c3e1bb4::t_0ceb59571db42d 75
+internal/service/event_service.go
+  s_aab72e8c3e1bb4::t_15923e174c0971 6,17-20,34-36,42-44,48-62,64,91-92,97-98,102
+tests/integration/worker_signing_test.go
+  s_aab72e8c3e1bb4::t_d2c31ee6394b07 60,138,206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "1366e594473a3b390bced201f929a49b7d20c007",
+  "prompts": {},
+  "sessions": {
+    "s_aab72e8c3e1bb4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e50e32ba-3795-4452-a286-08dfd75005ac",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
