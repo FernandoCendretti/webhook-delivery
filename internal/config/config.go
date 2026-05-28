@@ -101,6 +101,19 @@ func (s *Scheduler) ReaperTick() time.Duration {
 	return time.Duration(s.ReaperTickSeconds) * time.Second
 }
 
+// CircuitConfig holds per-endpoint circuit breaker parameters (FR-022).
+type CircuitConfig struct {
+	// Threshold is the number of consecutive transient failures required to open the circuit.
+	Threshold int `env:"CIRCUIT_BREAKER_THRESHOLD" envDefault:"5"`
+	// SuspensionSeconds is the suspension period duration in seconds.
+	SuspensionSeconds int `env:"CIRCUIT_BREAKER_SUSPENSION_SECONDS" envDefault:"60"`
+}
+
+// SuspensionDuration converts SuspensionSeconds to a time.Duration.
+func (c *CircuitConfig) SuspensionDuration() time.Duration {
+	return time.Duration(c.SuspensionSeconds) * time.Second
+}
+
 func LoadAPI() (*API, error) {
 	var cfg API
 	if err := env.Parse(&cfg); err != nil {

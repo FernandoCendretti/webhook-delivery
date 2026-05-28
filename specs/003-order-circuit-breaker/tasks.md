@@ -28,17 +28,17 @@ user stories.
 **Purpose**: All three migrations must apply cleanly before any code depends on the
 new schema. They are sequential in goose order but can be written in parallel.
 
-- [ ] T001 Create `internal/store/migrations/004_tenants.sql` — `CREATE TABLE tenants` with
+- [x] T001 Create `internal/store/migrations/004_tenants.sql` — `CREATE TABLE tenants` with
       `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`, `name TEXT` with CHECK constraint
       (NULL or length 1–255), `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`
       (see plan.md §Migration 004)
-- [ ] T002 [P] Create `internal/store/migrations/005_tenant_columns.sql` — inserts
+- [x] T002 [P] Create `internal/store/migrations/005_tenant_columns.sql` — inserts
       system-default-tenant row; adds `tenant_id UUID REFERENCES tenants(id)` to `endpoints`,
       `events`, and `deliveries` (each with UPDATE backfill and `SET NOT NULL`); adds
       `idx_endpoints_tenant` and `idx_deliveries_tenant_ordering` partial index on
       `(tenant_id, created_at) WHERE status NOT IN ('delivered','permanently_failed')`
       (see plan.md §Migration 005)
-- [ ] T003 [P] Create `internal/store/migrations/006_circuit_breaker.sql` — creates
+- [x] T003 [P] Create `internal/store/migrations/006_circuit_breaker.sql` — creates
       `circuit_state` ENUM `('closed','open','half_open')`; adds `circuit_state`,
       `circuit_failure_count`, `circuit_suspended_until`, `circuit_sensitive_recovery`,
       `circuit_probe_delivery_id` columns to `endpoints`; adds `idx_endpoints_open_suspended`
@@ -55,15 +55,15 @@ Postgres container without errors.
 **Purpose**: Pure types and config that all downstream components depend on. No store or
 HTTP dependencies at this layer.
 
-- [ ] T004 [P] Create `internal/domain/tenant.go` — `Tenant` struct with fields
+- [x] T004 [P] Create `internal/domain/tenant.go` — `Tenant` struct with fields
       `ID uuid.UUID`, `Name *string` (nil when not provided by producer), `CreatedAt time.Time`
       (see plan.md §Domain types)
-- [ ] T005 [P] Create `internal/domain/circuit_breaker.go` — `CircuitState` type (string)
+- [x] T005 [P] Create `internal/domain/circuit_breaker.go` — `CircuitState` type (string)
       with constants `CircuitClosed`, `CircuitOpen`, `CircuitHalfOpen`; `CircuitBreakerInfo`
       struct with `EndpointID uuid.UUID`, `State CircuitState`, `ConsecutiveFailures int`,
       `SuspendedUntil *time.Time` (non-nil only when State == CircuitOpen)
       (see plan.md §Domain types)
-- [ ] T006 [P] Add `CircuitConfig` struct to `internal/config/config.go` — fields
+- [x] T006 [P] Add `CircuitConfig` struct to `internal/config/config.go` — fields
       `Threshold int` (env `CIRCUIT_BREAKER_THRESHOLD`, default 5) and
       `SuspensionDuration time.Duration` (derived from `CIRCUIT_BREAKER_SUSPENSION_SECONDS`,
       default 60 s) loaded via `caarlos0/env/v11`; must be created before any circuit store
