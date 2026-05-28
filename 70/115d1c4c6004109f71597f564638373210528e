@@ -1,0 +1,82 @@
+internal/store/endpoint_store.go
+  s_aab72e8c3e1bb4::t_e7b4d4034bfdd6 26-27,30-33,42,44
+internal/api/server.go
+  s_aab72e8c3e1bb4::t_cf5572d098bae7 76,78-79,82-83
+  s_aab72e8c3e1bb4::t_76a4b0d89734ad 77,80-81
+internal/api/dto.go
+  s_aab72e8c3e1bb4::t_8682a86a2f66c6 18-34,37-40,48,54,62
+tests/integration/helpers_003_test.go
+  s_aab72e8c3e1bb4::t_ae215a21238d85 1-84,86-91
+  s_aab72e8c3e1bb4::t_d6bb9a048f586b 85
+internal/api/handlers_endpoint.go
+  s_aab72e8c3e1bb4::t_856d1d58451301 4,17-23,25,29,36-38,45-49,55-58,66,94
+internal/store/tenant_store.go
+  s_aab72e8c3e1bb4::t_9f6416df6d6e34 5-6,9,25-33,37-48
+  s_aab72e8c3e1bb4::t_79cac749567337 10,17,20-21
+  s_aab72e8c3e1bb4::t_03ff8caa8d4e25 1-4,7-8,11-16,18-19,22-24,34-36,49
+internal/api/handlers_tenant_test.go
+  s_aab72e8c3e1bb4::t_cb5e3208c1a952 36-43,68-72
+  s_aab72e8c3e1bb4::t_14bf1e87176f8d 1-35,44-67,73-97
+tests/integration/api_tenants_test.go
+  s_aab72e8c3e1bb4::t_5674623b3e0c58 136-139
+  s_aab72e8c3e1bb4::t_b5e624fd26e721 1-135,140-273
+internal/domain/endpoint.go
+  s_aab72e8c3e1bb4::t_be10f0c62dac22 20
+cmd/webhookd/main.go
+  s_aab72e8c3e1bb4::t_50bca87dbdc08b 129-130,141
+tests/integration/e2e_signing_idempotency_test.go
+  s_aab72e8c3e1bb4::t_59f4a9d5654ac7 44
+  s_aab72e8c3e1bb4::t_be180522f4af35 16-17
+specs/003-order-circuit-breaker/tasks.md
+  s_aab72e8c3e1bb4::t_83d8ace5cbff98 124
+  s_aab72e8c3e1bb4::t_adf8eca42a6602 128
+  s_aab72e8c3e1bb4::t_bd309064505290 115
+  s_aab72e8c3e1bb4::t_2ca4944ee97e9e 118
+  s_aab72e8c3e1bb4::t_b34bacc9597878 90
+  s_aab72e8c3e1bb4::t_b63db8a3c6425a 94
+  s_aab72e8c3e1bb4::t_4b1ddcc5e64638 109
+  s_aab72e8c3e1bb4::t_202a0736809940 121
+  s_aab72e8c3e1bb4::t_5ecd24624a1bc3 134
+  s_aab72e8c3e1bb4::t_6030a45b5204c8 131
+  s_aab72e8c3e1bb4::t_5861208fcc8ba5 112
+  s_aab72e8c3e1bb4::t_4d91876169c966 99
+tests/integration/helpers_signing_test.go
+  s_aab72e8c3e1bb4::t_9e008ccee9745d 75
+internal/service/tenant_service.go
+  s_aab72e8c3e1bb4::t_cb63e2296945da 5,28-34,37-40
+  s_aab72e8c3e1bb4::t_bc56c82d9253ba 1-4,6-27,35-36,41
+internal/api/handlers_tenant.go
+  s_aab72e8c3e1bb4::t_e9d1f3479f3987 1-4,7-8,10-33,76-77,93
+  s_aab72e8c3e1bb4::t_6475f44822d2db 5-6,9,34-75,78-92
+tests/integration/api_endpoints_003_test.go
+  s_aab72e8c3e1bb4::t_337f32527f34ec 1-169
+tests/integration/helpers_test.go
+  s_aab72e8c3e1bb4::t_ea387f6fb0ec35 34-35,40-42
+  s_aab72e8c3e1bb4::t_3ab44be52220e0 203-206,208,212-213
+tests/integration/worker_signing_test.go
+  s_aab72e8c3e1bb4::t_59f4a9d5654ac7 48,126,193
+  s_aab72e8c3e1bb4::t_c4255f252bad7b 17-18
+internal/service/endpoint_service.go
+  s_aab72e8c3e1bb4::t_c97e8ed8f8a101 6,14-21,30-34,37-38,42-49,52-56,60-67,72
+tests/integration/api_endpoints_test.go
+  s_aab72e8c3e1bb4::t_ffa301fcc80959 166-167,170-171
+  s_aab72e8c3e1bb4::t_97efa2d1ba621e 78,83
+  s_aab72e8c3e1bb4::t_936215acfd7fb0 70-74
+  s_aab72e8c3e1bb4::t_9b446f9617f5f9 94-108,122,134-135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "70115d1c4c6004109f71597f564638373210528e",
+  "prompts": {},
+  "sessions": {
+    "s_aab72e8c3e1bb4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e50e32ba-3795-4452-a286-08dfd75005ac",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
