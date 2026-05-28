@@ -1,0 +1,29 @@
+specs/003-order-circuit-breaker/tasks.md
+  s_d17e352eda3126::t_9b2cc8b09691f6 284-294
+  s_d17e352eda3126::t_dc0d4ac8a172b2 300-301,314-315,333,340,347
+  s_d17e352eda3126::t_4e03c2b9216e36 512-524,526-530
+  s_d17e352eda3126::t_f7e7ee6bced2c2 451,453-458
+  s_d17e352eda3126::t_1b12d0774ffe28 121
+  s_d17e352eda3126::t_5ee1e223a64818 58
+  s_d17e352eda3126::t_64b2fdd6555cb7 402
+  s_d17e352eda3126::t_c6404123d6a5ee 206-213
+  s_d17e352eda3126::t_467aeea232124d 1-57,59-120,122-164,167-205,214-283,295-299,302-313,316-332,334-339,341-346,348-401,403-450,452,459-498,500-501,504-511,525
+  s_d17e352eda3126::t_c76d3393aeab15 499,502-503
+  s_d17e352eda3126::t_cca3bc69a821f9 165-166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "36b202cdc9a0cd46b017cf0b83bdaea63be21b80",
+  "prompts": {},
+  "sessions": {
+    "s_d17e352eda3126": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33668b70-85b4-45e1-8844-724616453f04",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
