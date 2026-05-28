@@ -27,9 +27,9 @@ func TestEventsAPI_Submit_Valid(t *testing.T) {
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
-	// Register an endpoint first.
+	// Register an endpoint first using the system-default tenant.
 	res, err := http.Post(ts.URL+"/v1/endpoints", "application/json",
-		strings.NewReader(`{"url":"https://example.com/hook"}`))
+		strings.NewReader(`{"url":"https://example.com/hook","tenant_id":"`+systemDefaultTenantID+`"}`))
 	if err != nil {
 		t.Fatalf("register endpoint: %v", err)
 	}
@@ -47,6 +47,7 @@ func TestEventsAPI_Submit_Valid(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"endpoint_id": ep.ID,
+		"tenant_id":   systemDefaultTenantID,
 		"payload":     map[string]string{"hello": "world"},
 	})
 	res2, err := http.Post(ts.URL+"/v1/events", "application/json", bytes.NewReader(body))
@@ -80,6 +81,7 @@ func TestEventsAPI_Submit_UnknownEndpoint(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"endpoint_id": uuid.NewString(),
+		"tenant_id":   systemDefaultTenantID,
 		"payload":     map[string]string{"x": "1"},
 	})
 	res, err := http.Post(ts.URL+"/v1/events", "application/json", bytes.NewReader(body))

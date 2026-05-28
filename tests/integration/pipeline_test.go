@@ -44,13 +44,17 @@ func TestPipeline_HappyPath(t *testing.T) {
 	}))
 	t.Cleanup(dst.Close)
 
-	// Register destination endpoint via API.
-	epBody, _ := json.Marshal(map[string]string{"url": dst.URL})
+	// Register destination endpoint via API using the system-default tenant.
+	epBody, _ := json.Marshal(map[string]string{"url": dst.URL, "tenant_id": systemDefaultTenantID})
 	res, err := http.Post(apiServer.URL+"/v1/endpoints", "application/json", bytes.NewReader(epBody))
 	if err != nil {
 		t.Fatalf("register endpoint: %v", err)
 	}
 	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		b, _ := io.ReadAll(res.Body)
+		t.Fatalf("register endpoint status %d: %s", res.StatusCode, b)
+	}
 	var ep struct {
 		ID string `json:"id"`
 	}
@@ -58,11 +62,12 @@ func TestPipeline_HappyPath(t *testing.T) {
 		t.Fatalf("decode endpoint: %v", err)
 	}
 
-	// Submit event.
+	// Submit event with matching tenant_id.
 	payload := map[string]string{"hello": "pipeline"}
 	payloadBytes, _ := json.Marshal(payload)
 	evtBody, _ := json.Marshal(map[string]any{
 		"endpoint_id": ep.ID,
+		"tenant_id":   systemDefaultTenantID,
 		"payload":     json.RawMessage(payloadBytes),
 	})
 	res2, err := http.Post(apiServer.URL+"/v1/events", "application/json", bytes.NewReader(evtBody))

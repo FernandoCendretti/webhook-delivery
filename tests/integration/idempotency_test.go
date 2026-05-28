@@ -24,6 +24,7 @@ func (c *idempotencyClient) submit(ctx context.Context, t *testing.T, endpointID
 	t.Helper()
 	body, _ := json.Marshal(map[string]any{
 		"endpoint_id": endpointID,
+		"tenant_id":   systemDefaultTenantID,
 		"payload":     json.RawMessage(payload),
 	})
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.ts.URL+"/v1/events", bytes.NewReader(body))

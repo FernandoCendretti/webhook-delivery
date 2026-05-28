@@ -57,7 +57,7 @@ func TestE2E_SigningAndIdempotency(t *testing.T) {
 	// First submission with an idempotency key.
 	const idemKey = "e2e-test-key-001"
 	payload := json.RawMessage(`{"e2e":true}`)
-	d1, err := tp.EventSvc.Submit(ctx, ep.ID, payload, idemKey, payload)
+	d1, err := tp.EventSvc.Submit(ctx, ep.ID, payload, idemKey, payload, uuid.MustParse(systemDefaultTenantID))
 	if err != nil {
 		t.Fatalf("first submit: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestE2E_SigningAndIdempotency(t *testing.T) {
 	}
 
 	// Second submission with the same key and identical payload — must be idempotent.
-	d2, err := tp.EventSvc.Submit(ctx, ep.ID, payload, idemKey, payload)
+	d2, err := tp.EventSvc.Submit(ctx, ep.ID, payload, idemKey, payload, uuid.MustParse(systemDefaultTenantID))
 	if err != nil {
 		t.Fatalf("second (idempotent) submit: %v", err)
 	}

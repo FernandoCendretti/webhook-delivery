@@ -57,7 +57,7 @@ func TestWorkerSigning_HeadersPresentAndValid(t *testing.T) {
 	tp := startPipeline(ctx, t, pool, brokers, 30)
 
 	payload := json.RawMessage(`{"test":"signing"}`)
-	d, err := tp.EventSvc.Submit(ctx, ep.ID, payload, "", payload)
+	d, err := tp.EventSvc.Submit(ctx, ep.ID, payload, "", payload, uuid.MustParse(systemDefaultTenantID))
 	if err != nil {
 		t.Fatalf("submit event: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestWorkerSigning_RetryHasNewTimestamp(t *testing.T) {
 	tp := startPipeline(ctx, t, pool, brokers, 30)
 
 	payload := json.RawMessage(`{"test":"retry-signing"}`)
-	d, err := tp.EventSvc.Submit(ctx, ep.ID, payload, "", payload)
+	d, err := tp.EventSvc.Submit(ctx, ep.ID, payload, "", payload, uuid.MustParse(systemDefaultTenantID))
 	if err != nil {
 		t.Fatalf("submit event: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestWorkerSigning_EmptyPayload(t *testing.T) {
 
 	// Empty JSON object as event payload.
 	payload := json.RawMessage(`{}`)
-	d, err := tp.EventSvc.Submit(ctx, ep.ID, payload, "", payload)
+	d, err := tp.EventSvc.Submit(ctx, ep.ID, payload, "", payload, uuid.MustParse(systemDefaultTenantID))
 	if err != nil {
 		t.Fatalf("submit event: %v", err)
 	}

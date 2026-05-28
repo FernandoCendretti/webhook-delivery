@@ -12,11 +12,12 @@ import (
 
 	"github.com/FernandoCendretti/webhook-delivery/internal/domain"
 	"github.com/FernandoCendretti/webhook-delivery/internal/observability"
+	"github.com/FernandoCendretti/webhook-delivery/internal/service"
 )
 
 // eventSubmitter is the service interface consumed by the event handler.
 type eventSubmitter interface {
-	Submit(ctx context.Context, endpointID uuid.UUID, payload json.RawMessage, idempotencyKey string, rawBody []byte) (*domain.Delivery, error)
+	Submit(ctx context.Context, endpointID uuid.UUID, payload json.RawMessage, idempotencyKey string, rawBody []byte, tenantID uuid.UUID) (*domain.Delivery, error)
 }
 
 type eventHandler struct {
@@ -38,7 +39,7 @@ func newEventHandlerWithMetrics(svc eventSubmitter, log *slog.Logger, m *observa
 	return h
 }
 
-// Submit handles POST /v1/events.
+// Submit handles POST /v1/events. Requires tenant_id in the body (FR-007).
 func (h *eventHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
 
@@ -65,8 +66,11 @@ func (h *eventHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Distinguish "header absent" from "header present but empty". Using the map
-	// directly is necessary because Header.Get("X") returns "" for both cases.
+	if req.TenantID == nil {
+		writeError(w, http.StatusBadRequest, "missing_tenant_id", "")
+		return
+	}
+
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	if _, present := r.Header["Idempotency-Key"]; present {
 		if err := validateIdempotencyKey(idempotencyKey); err != nil {
@@ -75,13 +79,21 @@ func (h *eventHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	d, err := h.svc.Submit(r.Context(), req.EndpointID, req.Payload, idempotencyKey, rawBody)
+	d, err := h.svc.Submit(r.Context(), req.EndpointID, req.Payload, idempotencyKey, rawBody, *req.TenantID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			if h.metrics != nil {
 				h.metrics.EventsRejected.WithLabelValues("endpoint_not_found").Inc()
 			}
 			writeError(w, http.StatusNotFound, "endpoint_not_found", "")
+			return
+		}
+		if errors.Is(err, service.ErrTenantNotFound) {
+			writeError(w, http.StatusUnprocessableEntity, "tenant_not_found", "")
+			return
+		}
+		if errors.Is(err, service.ErrTenantEndpointMismatch) {
+			writeError(w, http.StatusUnprocessableEntity, "tenant_endpoint_mismatch", "")
 			return
 		}
 		if errors.Is(err, domain.ErrConflict) {

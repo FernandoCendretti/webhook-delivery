@@ -214,10 +214,11 @@ func seedEndpoint(ctx context.Context, pool *pgxpool.Pool, url string) (uuid.UUI
 	return id, err
 }
 
-// submitEvent calls the EventService to create an event + delivery.
+// submitEvent calls the EventService to create an event + delivery using the
+// system-default tenant (all pre-003 test fixtures use this tenant).
 func submitEvent(ctx context.Context, svc *service.EventService, endpointID uuid.UUID) (uuid.UUID, error) {
 	payload, _ := json.Marshal(map[string]string{"test": "payload"})
-	d, err := svc.Submit(ctx, endpointID, payload, "", payload)
+	d, err := svc.Submit(ctx, endpointID, payload, "", payload, uuid.MustParse(systemDefaultTenantID))
 	if err != nil {
 		return uuid.Nil, err
 	}

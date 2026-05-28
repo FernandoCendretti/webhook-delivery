@@ -73,8 +73,8 @@ func TestDeliveriesAPI_Get_WithAttempts(t *testing.T) {
 	ts := httptest.NewServer(apiHandler)
 	t.Cleanup(ts.Close)
 
-	// Register destination endpoint.
-	body, _ := json.Marshal(map[string]string{"url": dst.URL})
+	// Register destination endpoint using the system-default tenant.
+	body, _ := json.Marshal(map[string]string{"url": dst.URL, "tenant_id": systemDefaultTenantID})
 	res, err := http.Post(ts.URL+"/v1/endpoints", "application/json",
 		strings.NewReader(string(body)))
 	if err != nil {
@@ -84,9 +84,10 @@ func TestDeliveriesAPI_Get_WithAttempts(t *testing.T) {
 	json.NewDecoder(res.Body).Decode(&ep)
 	res.Body.Close()
 
-	// Submit event.
+	// Submit event with matching tenant_id.
 	evtBody, _ := json.Marshal(map[string]any{
 		"endpoint_id": ep.ID,
+		"tenant_id":   systemDefaultTenantID,
 		"payload":     map[string]string{"k": "v"},
 	})
 	res2, err := http.Post(ts.URL+"/v1/events", "application/json",

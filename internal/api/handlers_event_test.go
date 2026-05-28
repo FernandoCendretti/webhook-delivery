@@ -17,7 +17,7 @@ import (
 // stubSubmitter satisfies eventSubmitter for unit tests; always succeeds.
 type stubSubmitter struct{}
 
-func (s *stubSubmitter) Submit(_ context.Context, _ uuid.UUID, _ json.RawMessage, _ string, _ []byte) (*domain.Delivery, error) {
+func (s *stubSubmitter) Submit(_ context.Context, _ uuid.UUID, _ json.RawMessage, _ string, _ []byte, _ uuid.UUID) (*domain.Delivery, error) {
 	return &domain.Delivery{ID: uuid.New(), EventID: uuid.New(), EndpointID: uuid.New()}, nil
 }
 
@@ -65,9 +65,9 @@ func TestEventHandler_MalformedJSON(t *testing.T) {
 	}
 }
 
-// validEventBody returns a minimal valid POST /v1/events body.
+// validEventBody returns a minimal valid POST /v1/events body (includes tenant_id).
 func validEventBody() string {
-	return `{"endpoint_id":"` + uuid.NewString() + `","payload":{"k":"v"}}`
+	return `{"endpoint_id":"` + uuid.NewString() + `","tenant_id":"` + uuid.NewString() + `","payload":{"k":"v"}}`
 }
 
 func TestIdempotencyKey_NoHeader_Accepted(t *testing.T) {

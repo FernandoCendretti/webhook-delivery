@@ -72,6 +72,7 @@ type RotateSecretResponse struct {
 // EventRequest is the body for POST /v1/events.
 type EventRequest struct {
 	EndpointID uuid.UUID       `json:"endpoint_id"`
+	TenantID   *uuid.UUID      `json:"tenant_id"`
 	Payload    json.RawMessage `json:"payload"`
 }
 

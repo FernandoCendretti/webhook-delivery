@@ -57,12 +57,23 @@ func (s *DeliveryStore) GetByID(ctx context.Context, id uuid.UUID) (*domain.Deli
 
 // ClaimReady atomically selects up to batch scheduled deliveries that are due,
 // marks them in_flight with the given lease, and returns them.
+//
+// Per-tenant ordering (FR-008): a delivery D is only eligible if there is no
+// earlier delivery D' for the same tenant that is non-terminal (i.e., D' is
+// still in scheduled or in_flight state). This uses idx_deliveries_tenant_ordering.
 func (s *DeliveryStore) ClaimReady(ctx context.Context, batch int, leaseUntil time.Time) ([]domain.Delivery, error) {
 	const q = `
 		WITH claimed AS (
-			SELECT id FROM deliveries
-			WHERE status = 'scheduled' AND next_attempt_at <= NOW()
-			ORDER BY next_attempt_at
+			SELECT d.id FROM deliveries d
+			WHERE d.status = 'scheduled' AND d.next_attempt_at <= NOW()
+			  AND NOT EXISTS (
+			      SELECT 1 FROM deliveries d2
+			      WHERE d2.tenant_id = d.tenant_id
+			        AND d2.id != d.id
+			        AND d2.status NOT IN ('delivered', 'permanently_failed')
+			        AND d2.created_at < d.created_at
+			  )
+			ORDER BY d.next_attempt_at
 			LIMIT $1
 			FOR UPDATE SKIP LOCKED
 		)
@@ -143,19 +154,21 @@ func (s *DeliveryStore) Reschedule(ctx context.Context, id uuid.UUID, nextAt tim
 }
 
 // LoadForWorker fetches the delivery joined with its endpoint URL, signing secret,
-// and event payload in a single query — used by the worker to avoid extra round-trips.
+// circuit state, and event payload in a single query — used by the worker to avoid
+// extra round-trips.
 type WorkerDelivery struct {
-	Delivery      domain.Delivery
-	EndpointURL   string
-	Payload       []byte
-	SigningSecret []byte
+	Delivery             domain.Delivery
+	EndpointURL          string
+	Payload              []byte
+	SigningSecret        []byte
+	EndpointCircuitState string
 }
 
 func (s *DeliveryStore) LoadForWorker(ctx context.Context, deliveryID uuid.UUID) (*WorkerDelivery, error) {
 	const q = `
 		SELECT d.id, d.event_id, d.endpoint_id, d.status::text, d.attempt_count,
 		       d.next_attempt_at, d.in_flight_lease_until, d.created_at, d.updated_at,
-		       e.url, e.signing_secret, ev.payload
+		       e.url, e.signing_secret, ev.payload, e.circuit_state::text
 		FROM deliveries d
 		JOIN endpoints e  ON e.id = d.endpoint_id
 		JOIN events    ev ON ev.id = d.event_id
@@ -167,7 +180,7 @@ func (s *DeliveryStore) LoadForWorker(ctx context.Context, deliveryID uuid.UUID)
 		&wd.Delivery.Status, &wd.Delivery.AttemptCount,
 		&wd.Delivery.NextAttemptAt, &wd.Delivery.InFlightLeaseUntil,
 		&wd.Delivery.CreatedAt, &wd.Delivery.UpdatedAt,
-		&wd.EndpointURL, &wd.SigningSecret, &wd.Payload,
+		&wd.EndpointURL, &wd.SigningSecret, &wd.Payload, &wd.EndpointCircuitState,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

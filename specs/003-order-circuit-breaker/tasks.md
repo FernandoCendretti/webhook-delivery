@@ -154,12 +154,12 @@ becomes claimable on the next call to `ClaimReady`.
 
 > Write these tests FIRST and confirm they FAIL before any implementation.
 
-- [ ] T019 [US2] Integration tests in `tests/integration/api_events_003_test.go` (real Postgres):
+- [x] T019 [US2] Integration tests in `tests/integration/api_events_003_test.go` (real Postgres):
       `POST /v1/events` without `tenant_id` → 400 `missing_tenant_id`;
       with non-existent `tenant_id` → 422 `tenant_not_found`;
       endpoint belongs to different tenant → 422 `tenant_endpoint_mismatch`;
       valid `tenant_id` matching endpoint → 202
-- [ ] T020 [US2] Integration tests in `tests/integration/ordering_test.go` (real Postgres):
+- [x] T020 [US2] Integration tests in `tests/integration/ordering_test.go` (real Postgres):
       same-tenant ordering: E1 + E2 under same tenant; E2 absent from `ClaimReady` while E1
       is non-terminal; advance E1 to `delivered` via SQL; E2 appears in next `ClaimReady`;
       advance E1 to `permanently_failed` via SQL (separate sub-case); E2 also appears in
@@ -171,17 +171,17 @@ becomes claimable on the next call to `ClaimReady`.
 
 ### Implementation for User Story 2
 
-- [ ] T021 [P] [US2] Update `EventRequest` DTO in `internal/api/dto.go` — add mandatory
+- [x] T021 [P] [US2] Update `EventRequest` DTO in `internal/api/dto.go` — add mandatory
       `TenantID uuid.UUID` (json `tenant_id`)
-- [ ] T022 [US2] Update `internal/service/event_service.go` — `Submit` signature adds
+- [x] T022 [US2] Update `internal/service/event_service.go` — `Submit` signature adds
       `tenantID uuid.UUID`; inside TX: validate tenant exists → 422 `tenant_not_found`;
       validate endpoint exists and `endpoint.tenant_id == tenantID` → 422
       `tenant_endpoint_mismatch`; include `tenant_id` in `INSERT INTO events` and
       `INSERT INTO deliveries` (depends on T015)
-- [ ] T023 [US2] Update `internal/api/handlers_event.go` — parse mandatory `tenant_id` from
+- [x] T023 [US2] Update `internal/api/handlers_event.go` — parse mandatory `tenant_id` from
       body → 400 `missing_tenant_id` if absent; pass to `event_service.Submit`; map new
       sentinel errors → 422 `tenant_not_found` / `tenant_endpoint_mismatch` (depends on T021, T022)
-- [ ] T024 [US2] Update `internal/store/delivery_store.go` — add `tenant_id` column to
+- [x] T024 [US2] Update `internal/store/delivery_store.go` — add `tenant_id` column to
       `Insert` statement; add `EndpointCircuitState string` field to `WorkerDelivery` struct
       and populate it from `e.circuit_state` in `LoadForWorker` JOIN; update `ClaimReady` to
       add the per-tenant ordering NOT EXISTS subquery from plan.md §Flow D Step 1 (using

@@ -80,7 +80,7 @@ func TestRotateSecret_SuccessfulRotation(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	// Register endpoint via HTTP (captures old secret from 201 response).
-	createBody, _ := json.Marshal(map[string]string{"url": dstSrv.URL})
+	createBody, _ := json.Marshal(map[string]string{"url": dstSrv.URL, "tenant_id": systemDefaultTenantID})
 	createResp, err := http.Post(srv.URL+"/v1/endpoints", "application/json", bytes.NewReader(createBody))
 	if err != nil {
 		t.Fatalf("create endpoint: %v", err)
@@ -114,7 +114,7 @@ func TestRotateSecret_SuccessfulRotation(t *testing.T) {
 	tp := startPipeline(ctx, t, pool, brokers, 30)
 
 	payload := json.RawMessage(`{"x":1}`)
-	d, err := tp.EventSvc.Submit(ctx, created.ID, payload, "", payload)
+	d, err := tp.EventSvc.Submit(ctx, created.ID, payload, "", payload, uuid.MustParse(systemDefaultTenantID))
 	if err != nil {
 		t.Fatalf("submit event: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestRotateSecret_SequentialRotations(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	createBody, _ := json.Marshal(map[string]string{"url": dstSrv.URL})
+	createBody, _ := json.Marshal(map[string]string{"url": dstSrv.URL, "tenant_id": systemDefaultTenantID})
 	createResp, err := http.Post(srv.URL+"/v1/endpoints", "application/json", bytes.NewReader(createBody))
 	if err != nil {
 		t.Fatalf("create endpoint: %v", err)
@@ -186,7 +186,7 @@ func TestRotateSecret_SequentialRotations(t *testing.T) {
 	tp := startPipeline(ctx, t, pool, brokers, 30)
 
 	payload := json.RawMessage(`{"x":2}`)
-	d, err := tp.EventSvc.Submit(ctx, created.ID, payload, "", payload)
+	d, err := tp.EventSvc.Submit(ctx, created.ID, payload, "", payload, uuid.MustParse(systemDefaultTenantID))
 	if err != nil {
 		t.Fatalf("submit event: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestRotateSecret_AfterFailedDelivery(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	createBody, _ := json.Marshal(map[string]string{"url": dstSrv.URL})
+	createBody, _ := json.Marshal(map[string]string{"url": dstSrv.URL, "tenant_id": systemDefaultTenantID})
 	createResp, err := http.Post(srv.URL+"/v1/endpoints", "application/json", bytes.NewReader(createBody))
 	if err != nil {
 		t.Fatalf("create endpoint: %v", err)
@@ -283,7 +283,7 @@ func TestRotateSecret_AfterFailedDelivery(t *testing.T) {
 
 	// Submit event directly (proven pattern from TestWorkerSigning_* tests).
 	payload := json.RawMessage(`{"x":3}`)
-	d, err := tp.EventSvc.Submit(ctx, created.ID, payload, "", payload)
+	d, err := tp.EventSvc.Submit(ctx, created.ID, payload, "", payload, uuid.MustParse(systemDefaultTenantID))
 	if err != nil {
 		t.Fatalf("submit event: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestRotateSecret_Concurrent(t *testing.T) {
 	t.Cleanup(srv.Close)
 	ctx := context.Background()
 
-	createBody, _ := json.Marshal(map[string]string{"url": "https://example.com/wh"})
+	createBody, _ := json.Marshal(map[string]string{"url": "https://example.com/wh", "tenant_id": systemDefaultTenantID})
 	createResp, err := http.Post(srv.URL+"/v1/endpoints", "application/json", bytes.NewReader(createBody))
 	if err != nil {
 		t.Fatalf("create endpoint: %v", err)
