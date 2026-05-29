@@ -1,0 +1,19 @@
+specs/004-dlq-replay/plan.md
+  s_bbb30399609f91::t_a3b0861ab98d92 1-343
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "7aa0de9607e89b6cf512851a98ca5ef672a3b65c",
+  "prompts": {},
+  "sessions": {
+    "s_bbb30399609f91": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c076cfae-a86c-456d-9d8c-855441f4f921",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
