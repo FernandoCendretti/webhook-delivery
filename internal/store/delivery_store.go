@@ -61,10 +61,14 @@ func (s *DeliveryStore) GetByID(ctx context.Context, id uuid.UUID) (*domain.Deli
 // Per-tenant ordering (FR-008): a delivery D is only eligible if there is no
 // earlier delivery D' for the same tenant that is non-terminal (i.e., D' is
 // still in scheduled or in_flight state). This uses idx_deliveries_tenant_ordering.
+//
+// Circuit breaker (FR-014): only deliveries whose endpoint is 'closed', or is
+// 'half_open' and has designated this delivery as the probe, are eligible.
 func (s *DeliveryStore) ClaimReady(ctx context.Context, batch int, leaseUntil time.Time) ([]domain.Delivery, error) {
 	const q = `
 		WITH claimed AS (
 			SELECT d.id FROM deliveries d
+			JOIN endpoints e ON e.id = d.endpoint_id
 			WHERE d.status = 'scheduled' AND d.next_attempt_at <= NOW()
 			  AND NOT EXISTS (
 			      SELECT 1 FROM deliveries d2
@@ -73,9 +77,13 @@ func (s *DeliveryStore) ClaimReady(ctx context.Context, batch int, leaseUntil ti
 			        AND d2.status NOT IN ('delivered', 'permanently_failed')
 			        AND d2.created_at < d.created_at
 			  )
+			  AND (
+			      e.circuit_state = 'closed'
+			      OR (e.circuit_state = 'half_open' AND e.circuit_probe_delivery_id = d.id)
+			  )
 			ORDER BY d.next_attempt_at
 			LIMIT $1
-			FOR UPDATE SKIP LOCKED
+			FOR UPDATE OF d SKIP LOCKED
 		)
 		UPDATE deliveries d
 		SET status = 'in_flight',
