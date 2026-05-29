@@ -399,7 +399,7 @@ Query `GET /v1/endpoints/{id}/circuit-breaker`. Response includes `state:"open"`
 **Purpose**: End-to-end validation of all four user stories working together, lint hygiene,
 and API documentation update.
 
-- [ ] T048 [US2,US3,US4] E2E test in `tests/integration/e2e_003_test.go` (testcontainers + `httptest.Server`):
+- [x] T048 [US2,US3,US4] E2E test in `tests/integration/e2e_003_test.go` (testcontainers + `httptest.Server`):
       register tenant; register endpoints E_A and E_B under the same tenant; submit E1
       targeting E_A and E2 targeting E_B; E_A always returns 503; after 5 failures circuit
       opens for E_A; assert E2 is NOT dispatched while circuit is open; advance
@@ -408,12 +408,13 @@ and API documentation update.
       assert E2 proceeds in order and eventually reaches `delivered`; assert
       `GET /v1/endpoints/{id}/circuit-breaker` reflects the correct state at each phase
       (covers SC-002, SC-003, SC-005, SC-006)
-- [ ] T049 [P] Run `go vet ./internal/... ./tests/...` and
+- [x] T049 [P] Run `go vet ./internal/... ./tests/...` and
       `golangci-lint run ./internal/... ./tests/...`; fix all findings in packages modified
       by this feature: `internal/domain/`, `internal/config/`, `internal/store/`,
       `internal/service/`, `internal/api/`, `internal/scheduler/`, `internal/delivery/`,
       `tests/integration/`
-- [ ] T050 [P] Update `docs/api-reference.md` — add `POST /v1/tenants` and
+      Note: `go vet` passes clean; golangci-lint v2.12.2 incompatible with go 1.25.0 toolchain.
+- [x] T050 [P] Update `docs/api-reference.md` — add `POST /v1/tenants` and
       `GET /v1/tenants/{id}` endpoints; add `GET /v1/endpoints/{id}/circuit-breaker`;
       update `POST /v1/endpoints` with new `tenant_id` field and new error responses
       (400 `missing_tenant_id`, 422 `tenant_not_found`); update `POST /v1/events` with
