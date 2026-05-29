@@ -97,6 +97,52 @@ PostgreSQL
 Replayed deliveries enter the existing scheduler pipeline as ordinary `scheduled`
 deliveries; no additional Kafka message is produced at replay time.
 
+#### `DLQService` interface
+
+```go
+type DLQService interface {
+    List(ctx context.Context, filter DLQFilter, page, limit int) ([]DLQEntry, Pagination, error)
+    Detail(ctx context.Context, deliveryID uuid.UUID) (*DLQDetail, error)
+    Replay(ctx context.Context, deliveryID uuid.UUID) (*domain.Delivery, error)
+    BulkReplay(ctx context.Context, filter DLQFilter) (int, error)
+}
+
+// DLQFilter holds the optional filters shared by List and BulkReplay.
+type DLQFilter struct {
+    TenantID   *uuid.UUID
+    EndpointID *uuid.UUID
+}
+
+// DLQEntry is a single row in the listing response.
+type DLQEntry struct {
+    DeliveryID   uuid.UUID
+    EventID      uuid.UUID
+    EndpointID   uuid.UUID
+    TenantID     uuid.UUID
+    AttemptCount int
+    FailedAt     time.Time
+}
+
+// DLQDetail is the full detail response (metadata + attempt history).
+type DLQDetail struct {
+    DLQEntry
+    Attempts []domain.Attempt
+}
+
+// Pagination carries paging metadata returned by List.
+type Pagination struct {
+    Page    int
+    Limit   int
+    HasNext bool
+}
+```
+
+Error contract: `Detail` and `Replay` return `domain.ErrNotFound` when the delivery does
+not exist or is not `permanently_failed`. `Replay` returns `domain.ErrConflict` (new
+sentinel) when a non-terminal replay already exists, and `domain.ErrUnprocessable` when
+the endpoint no longer exists. `BulkReplay` returns `domain.ErrUnprocessable` when a
+filter entity does not exist.
+
 ### Data model
 
 #### Migration `007_dlq_replay.sql`
@@ -132,10 +178,11 @@ No existing columns are altered; migration is additive and backward-compatible.
 
 | Method | SQL summary |
 |---|---|
-| `DeliveryStore.ListPermanentlyFailed(ctx, filter, page, limit)` | SELECT from `deliveries` WHERE `status='permanently_failed'` + optional `tenant_id`/`endpoint_id` filters, ORDER BY `updated_at DESC`, LIMIT/OFFSET |
+| `DeliveryStore.ListPermanentlyFailed(ctx, filter, page, limit)` | SELECT from `deliveries` WHERE `status='permanently_failed'` + optional filters, ORDER BY `updated_at DESC`, LIMIT/OFFSET — used by the HTTP listing endpoint |
+| `DeliveryStore.ListPermanentlyFailedIDs(ctx, filter)` | SELECT id from `deliveries` WHERE `status='permanently_failed'` + optional filters — returns all matching IDs as a snapshot; used exclusively by BulkReplay to avoid OFFSET drift |
 | `DeliveryStore.GetPermanentlyFailed(ctx, id)` | SELECT delivery WHERE `id=$1 AND status='permanently_failed'` |
-| `DeliveryStore.HasNonTerminalReplay(ctx, sourceID)` | SELECT 1 WHERE `source_delivery_id=$1 AND status IN ('scheduled','in_flight')` |
-| `DeliveryStore.CreateReplay(ctx, eventID, endpointID, sourceID)` | INSERT with `source_delivery_id`; leverages unique index to reject concurrent duplicates |
+| `DeliveryStore.HasNonTerminalReplay(ctx, sourceID)` | SELECT 1 WHERE `source_delivery_id=$1 AND status IN ('scheduled','in_flight')` — used only by the bulk flow as a pre-filter; single replay relies solely on the unique index conflict |
+| `DeliveryStore.CreateReplay(ctx, eventID, endpointID, sourceID)` | INSERT with `source_delivery_id`; leverages unique index to reject concurrent duplicates; callers must handle `pgx.PgError` code `23505` |
 | `AttemptStore.ListByDelivery(ctx, deliveryID)` | SELECT attempts WHERE `delivery_id=$1` ORDER BY `sequence ASC` |
 
 `DeliveryStore.Create` is extended to accept an optional `sourceDeliveryID` parameter;
@@ -175,11 +222,13 @@ All responses use `Content-Type: application/json`.
   "pagination": {
     "page": 1,
     "limit": 20,
-    "total": 42,
     "has_next": true
   }
 }
 ```
+
+**Response 400**: malformed query parameter (invalid UUID format for `tenant_id` or
+`endpoint_id`; `limit` outside 1–100; `page` < 1).
 
 `failed_at` = `MAX(attempts.completed_at)` for the delivery, computed via a sub-select
 in the listing query.
@@ -198,7 +247,6 @@ in the listing query.
   "tenant_id":    "uuid",
   "attempt_count": 5,
   "failed_at":    "2026-05-29T10:00:00Z",
-  "source_delivery_id": null,
   "attempts": [
     {
       "sequence":             1,
@@ -213,6 +261,11 @@ in the listing query.
 ```
 
 **Response 404**: delivery does not exist or status ≠ `permanently_failed`.
+
+`failed_at` in the detail response is derived from the `AttemptStore.ListByDelivery`
+result: the service layer takes `MAX(completed_at)` across all returned attempts. Since
+all attempts for a `permanently_failed` delivery are complete, `completed_at` is never
+null and no nullable guard is required.
 
 ---
 
@@ -284,17 +337,27 @@ same polling interval). Per-tenant ordering is enforced by the existing
 1. Decode and validate body; return 400 if both filter fields are absent.
 2. Verify that filter entities exist (`TenantStore.GetByID` / `EndpointStore.GetByID`)
    → 422 if not found.
-3. Paginate through `DeliveryStore.ListPermanentlyFailed` (page size 100) and for each
-   delivery call `CreateReplay` skipping those where `HasNonTerminalReplay` returns true.
-4. Accumulate count of successful replays; return 202 with `{ "replayed": N }`.
-5. Bulk replay runs within a single HTTP request; there is no background job.
+3. Fetch all matching delivery IDs upfront via a single
+   `DeliveryStore.ListPermanentlyFailedIDs(ctx, filter)` query (returns `[]uuid.UUID`,
+   no OFFSET pagination — snapshot semantics avoid mid-iteration consistency drift).
+4. Iterate the snapshot: for each ID call `CreateReplay`. Treat a `23505` pgx error
+   (concurrent replay already inserted) as a skip — do not count it and do not abort
+   the loop. Skip IDs where `HasNonTerminalReplay` returns true before attempting
+   the INSERT (optimistic pre-filter to avoid unnecessary constraint violations).
+5. Accumulate count of successful INSERTs; return 202 with `{ "replayed": N }`.
+6. Bulk replay runs within a single HTTP request; there is no background job.
 
 #### DLQ listing freshness (FR-013 / SC-001)
 
-`GET /v1/dlq` queries PostgreSQL directly with no caching layer. Because the delivery
-worker writes `status='permanently_failed'` synchronously via `DeliveryStore`, the row
-is visible to the listing query on the next poll (typically < 1 s for a healthy Postgres
-instance under expected load).
+`GET /v1/dlq` queries PostgreSQL directly with no caching layer. The delivery worker
+writes `status='permanently_failed'` synchronously via `DeliveryStore`; the row is
+immediately committed and visible to subsequent reads. The partial index
+`idx_deliveries_pf_tenant_endpoint` (covering `status`, `tenant_id`, `endpoint_id`,
+`updated_at DESC`) ensures the listing query uses an index scan rather than a seq scan,
+keeping latency well under the 1 s SLO even with 1 000+ permanently-failed records.
+SC-001 is validated in the integration test by recording the `updated_at` timestamp at
+status transition, then timing a `GET /v1/dlq` call and asserting both the delivery
+appears in the response and the elapsed time is < 1 s.
 
 ### External dependencies
 
