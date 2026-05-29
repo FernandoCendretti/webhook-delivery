@@ -1,0 +1,19 @@
+internal/store/delivery_store.go
+  s_aab72e8c3e1bb4::t_150283e8e8d1ca 64-66,71,80-83,86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "109e8554e560590a95619bb3d98e6d696d908194",
+  "prompts": {},
+  "sessions": {
+    "s_aab72e8c3e1bb4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e50e32ba-3795-4452-a286-08dfd75005ac",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
