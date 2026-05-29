@@ -1,0 +1,49 @@
+internal/api/server.go
+  s_591fd21790e2da::t_c64ace39525906 90-95
+internal/domain/errors.go
+  s_591fd21790e2da::t_18bc98077f6e23 11,13-16
+internal/service/dlq_service.go
+  s_591fd21790e2da::t_19a08f3632c80a 5
+  s_591fd21790e2da::t_43ba92a4d69791 14,27,30,35,87,90
+  s_591fd21790e2da::t_af3a660ec89f1d 58-76
+  s_591fd21790e2da::t_f3463baaab084e 1-4,6-13,15-26,28-29,31-34,36-57,77-86,88-89
+internal/domain/dlq.go
+  s_591fd21790e2da::t_6b9a4037aaf810 1-23
+internal/api/dto.go
+  s_591fd21790e2da::t_7cb63727b38e05 108-130
+specs/004-dlq-replay/tasks.md
+  s_591fd21790e2da::t_7d63d826a3c591 31-34,45,64-65,69-72
+internal/store/delivery_store.go
+  s_591fd21790e2da::t_5638874b4e0d61 27-28,30-31,35
+  s_591fd21790e2da::t_610c71d1c3f395 269,272-302,304,306-313
+  s_591fd21790e2da::t_00d9019cc6d20a 268,270-271,303,305
+internal/domain/delivery.go
+  s_591fd21790e2da::t_20e9cad810db74 39
+tests/integration/dlq_test.go
+  s_591fd21790e2da::t_3a81d05b259923 1-17,19-24,27-41,43-44,47,54,56-57,60-67,74,76-92,94-122,125-150,153,155-156,158-159,162-164,166,168-173,177,179-181,183-188,190-194,198,200-208,212,215,223-237,239,241-247,249,252,255,257-279,282-283,285-300,302-305,308,310,314-325,327-328,332-339,342-344,348-350,352-353,355-372
+  s_591fd21790e2da::t_fed60664ad24ce 18,25-26,42,45-46,48-53,55,58-59,68-73,75,93,123-124,151-152,154,157,160-161,165,167,174-176,178,182,189,195-197,199,209-211,213-214,216-222,238,240,248,250-251,253-254,256,280-281,284,301,306-307,309,311-313,326,329-331,340-341,345-347,351,354
+internal/service/dlq_service_test.go
+  s_591fd21790e2da::t_591fe682068bcd 17,20,25,45,48,64,74,84,94,107,128,130,135,151
+  s_591fd21790e2da::t_17830ddd1b420b 1-16,18-19,21-24,26-44,46-47,49-63,65-73,75-83,85-93,95-106,108-127,129,131-134,136-150,152-155
+internal/store/migrations/007_dlq_replay.sql
+  s_591fd21790e2da::t_71d0aec1c67242 1-9
+internal/api/handlers_dlq.go
+  s_591fd21790e2da::t_0a123974a25f91 96
+  s_591fd21790e2da::t_f7ba1fffeba81a 1-95,97-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "3650997d83427d15033eb4d0d0122d438fd28bd6",
+  "prompts": {},
+  "sessions": {
+    "s_591fd21790e2da": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b825873d-d275-4078-8c2c-67b92c837b9f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
