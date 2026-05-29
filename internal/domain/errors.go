@@ -8,5 +8,9 @@ import "errors"
 var ErrNotFound = errors.New("not found")
 
 // ErrConflict is returned by event_service when an Idempotency-Key is
-// reused with a different payload (FR-007).
+// reused with a different payload (FR-007), or when a replay already exists.
 var ErrConflict = errors.New("conflict")
+
+// ErrUnprocessable is returned when a requested operation cannot be completed
+// due to a semantic constraint (e.g. endpoint no longer exists).
+var ErrUnprocessable = errors.New("unprocessable")

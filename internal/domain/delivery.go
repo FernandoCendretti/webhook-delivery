@@ -36,6 +36,7 @@ type Delivery struct {
 	InFlightLeaseUntil *time.Time
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
+	SourceDeliveryID   *uuid.UUID
 }
 
 // MarkInFlight transitions the delivery from scheduled to in_flight and sets

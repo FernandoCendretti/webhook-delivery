@@ -87,6 +87,12 @@ func (s *Server) RegisterDeliveries(svc deliveryGetter) {
 	s.mux.HandleFunc("GET /v1/deliveries/{id}", h.Get)
 }
 
+// RegisterDLQ wires the /v1/dlq routes for DLQ inspection and replay.
+func (s *Server) RegisterDLQ(svc service.DLQService) {
+	h := newDLQHandler(svc, s.cfg.Logger)
+	s.mux.HandleFunc("GET /v1/dlq", h.List)
+}
+
 // RegisterCircuitBreaker wires the GET /v1/endpoints/{id}/circuit-breaker route.
 func (s *Server) RegisterCircuitBreaker(store circuitStateGetter) {
 	h := newCircuitHandler(store, s.cfg.Logger)

@@ -28,10 +28,10 @@ precede all implementation tasks. Stories are ordered P1 → P2 → P1 → P3 (s
 
 **⚠️ CRITICAL**: No user story work can begin until T001–T004 are complete.
 
-- [ ] T001 Write migration `internal/store/migrations/007_dlq_replay.sql`: `ALTER TABLE deliveries ADD COLUMN source_delivery_id UUID REFERENCES deliveries(id)`; unique partial index `idx_deliveries_one_active_replay ON deliveries(source_delivery_id) WHERE source_delivery_id IS NOT NULL AND status IN ('scheduled','in_flight')`; partial index `idx_deliveries_pf_tenant_endpoint ON deliveries(status, tenant_id, endpoint_id, updated_at DESC) WHERE status='permanently_failed'`
-- [ ] T002 [P] Add `SourceDeliveryID *uuid.UUID` field to `domain.Delivery` struct in `internal/domain/delivery.go`
-- [ ] T003 [P] Add sentinel errors `ErrConflict` and `ErrUnprocessable` in `internal/domain/errors.go`
-- [ ] T004 Extend `DeliveryStore.Create` in `internal/store/delivery_store.go` to accept an optional `sourceDeliveryID *uuid.UUID` parameter; set the column on INSERT; update all existing call sites in the package to pass `nil`; update `DeliveryStore` interface accordingly (depends on T001, T002)
+- [x] T001 Write migration `internal/store/migrations/007_dlq_replay.sql`: `ALTER TABLE deliveries ADD COLUMN source_delivery_id UUID REFERENCES deliveries(id)`; unique partial index `idx_deliveries_one_active_replay ON deliveries(source_delivery_id) WHERE source_delivery_id IS NOT NULL AND status IN ('scheduled','in_flight')`; partial index `idx_deliveries_pf_tenant_endpoint ON deliveries(status, tenant_id, endpoint_id, updated_at DESC) WHERE status='permanently_failed'`
+- [x] T002 [P] Add `SourceDeliveryID *uuid.UUID` field to `domain.Delivery` struct in `internal/domain/delivery.go`
+- [x] T003 [P] Add sentinel errors `ErrConflict` and `ErrUnprocessable` in `internal/domain/errors.go`
+- [x] T004 Extend `DeliveryStore.Create` in `internal/store/delivery_store.go` to accept an optional `sourceDeliveryID *uuid.UUID` parameter; set the column on INSERT; update all existing call sites in the package to pass `nil`; update `DeliveryStore` interface accordingly (depends on T001, T002)
 
 **Checkpoint**: Migration file written; `domain.Delivery` has `SourceDeliveryID`; new sentinels compile; `DeliveryStore.Create` signature updated and all call sites pass `nil`.
 
@@ -42,7 +42,7 @@ precede all implementation tasks. Stories are ordered P1 → P2 → P1 → P3 (s
 **Purpose**: Define the shared interface and types referenced by all four user story
 phases. No business logic yet.
 
-- [ ] T005 Declare `DLQService` interface, `DLQFilter`, `DLQEntry`, `DLQDetail`, and `Pagination` types in `internal/service/dlq_service.go`; create a concrete `dlqService` struct embedding the store interfaces it will need (`DeliveryStore`, `AttemptStore`, `EndpointStore`); leave all method bodies as `panic("not implemented")` placeholders
+- [x] T005 Declare `DLQService` interface, `DLQFilter`, `DLQEntry`, `DLQDetail`, and `Pagination` types in `internal/service/dlq_service.go`; create a concrete `dlqService` struct embedding the store interfaces it will need (`DeliveryStore`, `AttemptStore`, `EndpointStore`); leave all method bodies as `panic("not implemented")` placeholders
 
 **Checkpoint**: Package compiles; interface and types are importable by subsequent phases.
 
@@ -61,15 +61,15 @@ the delivery appears with correct `delivery_id`, `endpoint_id`, `attempt_count`,
 
 > Write these tests FIRST; run them and confirm they FAIL before touching implementation.
 
-- [ ] T006 [US1] Write integration tests for `GET /v1/dlq` in `tests/integration/dlq_test.go` covering: happy-path single item, empty list, pagination (`page=2`, `has_next`), `tenant_id` filter, `endpoint_id` filter, invalid UUID query param → 400, **SC-001 freshness timing** (record timestamp at status transition; call `GET /v1/dlq`; assert delivery appears in response and elapsed time < 1 s), **SC-004 performance** (seed 1 000+ `permanently_failed` deliveries; call `GET /v1/dlq`; assert first page returns in < 1 s); tests must FAIL at this point
-- [ ] T007 [US1] Write unit tests for `DLQService.List` in `internal/service/dlq_service_test.go`: mock store returns empty list, `page < 1` rejected, `limit` outside 1–100 rejected, filter fields propagated to store call; tests must FAIL
+- [x] T006 [US1] Write integration tests for `GET /v1/dlq` in `tests/integration/dlq_test.go` covering: happy-path single item, empty list, pagination (`page=2`, `has_next`), `tenant_id` filter, `endpoint_id` filter, invalid UUID query param → 400, **SC-001 freshness timing** (record timestamp at status transition; call `GET /v1/dlq`; assert delivery appears in response and elapsed time < 1 s), **SC-004 performance** (seed 1 000+ `permanently_failed` deliveries; call `GET /v1/dlq`; assert first page returns in < 1 s); tests must FAIL at this point
+- [x] T007 [US1] Write unit tests for `DLQService.List` in `internal/service/dlq_service_test.go`: mock store returns empty list, `page < 1` rejected, `limit` outside 1–100 rejected, filter fields propagated to store call; tests must FAIL
 
 ### Implementation for User Story 1
 
-- [ ] T008 [P] [US1] Implement `DeliveryStore.ListPermanentlyFailed(ctx, filter DLQFilter, page, limit int)` in `internal/store/delivery_store.go`: `SELECT … FROM deliveries LEFT JOIN LATERAL (SELECT MAX(completed_at) FROM attempts …) WHERE status='permanently_failed'` + optional filters, `ORDER BY updated_at DESC`, `LIMIT/OFFSET`; add method to `DeliveryStore` interface (depends on T001)
-- [ ] T009 [P] [US1] Add `DLQListResponse`, `DLQItemResponse`, `PaginationResponse` DTO types in `internal/api/dto.go`
-- [ ] T010 [US1] Implement `DLQService.List` in `internal/service/dlq_service.go`: validate `page ≥ 1` and `1 ≤ limit ≤ 100`, call `ListPermanentlyFailed` with `limit+1` to compute `HasNext`, map rows to `[]DLQEntry` and `Pagination` (depends on T005, T008)
-- [ ] T011 [US1] Implement `handleListDLQ` in `internal/api/handlers_dlq.go`; add `RegisterDLQ` method and register `GET /v1/dlq` route in `internal/api/server.go` (depends on T009, T010)
+- [x] T008 [P] [US1] Implement `DeliveryStore.ListPermanentlyFailed(ctx, filter DLQFilter, page, limit int)` in `internal/store/delivery_store.go`: `SELECT … FROM deliveries LEFT JOIN LATERAL (SELECT MAX(completed_at) FROM attempts …) WHERE status='permanently_failed'` + optional filters, `ORDER BY updated_at DESC`, `LIMIT/OFFSET`; add method to `DeliveryStore` interface (depends on T001)
+- [x] T009 [P] [US1] Add `DLQListResponse`, `DLQItemResponse`, `PaginationResponse` DTO types in `internal/api/dto.go`
+- [x] T010 [US1] Implement `DLQService.List` in `internal/service/dlq_service.go`: validate `page ≥ 1` and `1 ≤ limit ≤ 100`, call `ListPermanentlyFailed` with `limit+1` to compute `HasNext`, map rows to `[]DLQEntry` and `Pagination` (depends on T005, T008)
+- [x] T011 [US1] Implement `handleListDLQ` in `internal/api/handlers_dlq.go`; add `RegisterDLQ` method and register `GET /v1/dlq` route in `internal/api/server.go` (depends on T009, T010)
 
 **Checkpoint**: `go test ./tests/integration/ -run TestDLQList` and `go test ./internal/service/ -run TestDLQServiceList` both pass green.
 

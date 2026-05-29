@@ -105,6 +105,29 @@ type DeliveryResponse struct {
 	Attempts      []AttemptResponse `json:"attempts"`
 }
 
+// DLQItemResponse is a single entry in the DLQ listing.
+type DLQItemResponse struct {
+	DeliveryID   uuid.UUID `json:"delivery_id"`
+	EventID      uuid.UUID `json:"event_id"`
+	EndpointID   uuid.UUID `json:"endpoint_id"`
+	TenantID     uuid.UUID `json:"tenant_id"`
+	AttemptCount int       `json:"attempt_count"`
+	FailedAt     time.Time `json:"failed_at"`
+}
+
+// PaginationResponse carries pagination metadata in the DLQ listing response.
+type PaginationResponse struct {
+	Page    int  `json:"page"`
+	Limit   int  `json:"limit"`
+	HasNext bool `json:"has_next"`
+}
+
+// DLQListResponse is the body for GET /v1/dlq.
+type DLQListResponse struct {
+	Items      []DLQItemResponse  `json:"items"`
+	Pagination PaginationResponse `json:"pagination"`
+}
+
 // CircuitBreakerResponse is the body for GET /v1/endpoints/{id}/circuit-breaker.
 // SuspendedUntil is omitted unless state is "open". The internal half_open state
 // is rendered as "half-open" (hyphen) in the API.

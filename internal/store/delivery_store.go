@@ -24,15 +24,15 @@ func NewDeliveryStore(pool *pgxpool.Pool) *DeliveryStore {
 }
 
 // Create inserts a new delivery in the 'scheduled' status and returns the
-// fully populated record.
-func (s *DeliveryStore) Create(ctx context.Context, eventID, endpointID uuid.UUID) (*domain.Delivery, error) {
+// fully populated record. sourceDeliveryID may be nil for original deliveries.
+func (s *DeliveryStore) Create(ctx context.Context, eventID, endpointID uuid.UUID, sourceDeliveryID *uuid.UUID) (*domain.Delivery, error) {
 	const q = `
-		INSERT INTO deliveries (event_id, endpoint_id, status, attempt_count, next_attempt_at)
-		VALUES ($1, $2, 'scheduled', 0, NOW())
+		INSERT INTO deliveries (event_id, endpoint_id, status, attempt_count, next_attempt_at, source_delivery_id)
+		VALUES ($1, $2, 'scheduled', 0, NOW(), $3)
 		RETURNING id, event_id, endpoint_id, status::text, attempt_count,
 		          next_attempt_at, in_flight_lease_until, created_at, updated_at`
 	var d domain.Delivery
-	if err := scanDelivery(s.pool.QueryRow(ctx, q, eventID, endpointID), &d); err != nil {
+	if err := scanDelivery(s.pool.QueryRow(ctx, q, eventID, endpointID, sourceDeliveryID), &d); err != nil {
 		return nil, fmt.Errorf("create delivery: %w", err)
 	}
 	return &d, nil
@@ -263,6 +263,52 @@ func (s *DeliveryStore) GetByIDWithAttempts(ctx context.Context, id uuid.UUID) (
 		return nil, nil, domain.ErrNotFound
 	}
 	return &d, attempts, nil
+}
+
+// ListPermanentlyFailed returns a paginated slice of domain.DLQEntry rows for
+// deliveries with status='permanently_failed', ordered by updated_at DESC.
+// The caller passes limit+1 to detect HasNext.
+func (s *DeliveryStore) ListPermanentlyFailed(ctx context.Context, filter domain.DLQFilter, page, limit int) ([]domain.DLQEntry, error) {
+	offset := (page - 1) * limit
+	args := []any{limit, offset}
+	where := "WHERE d.status = 'permanently_failed'"
+	if filter.TenantID != nil {
+		args = append(args, *filter.TenantID)
+		where += fmt.Sprintf(" AND d.tenant_id = $%d", len(args))
+	}
+	if filter.EndpointID != nil {
+		args = append(args, *filter.EndpointID)
+		where += fmt.Sprintf(" AND d.endpoint_id = $%d", len(args))
+	}
+
+	q := fmt.Sprintf(`
+		SELECT d.id, d.event_id, d.endpoint_id, d.tenant_id, d.attempt_count,
+		       COALESCE(lat.failed_at, d.updated_at) AS failed_at
+		FROM deliveries d
+		LEFT JOIN LATERAL (
+		    SELECT MAX(completed_at) AS failed_at
+		    FROM attempts
+		    WHERE delivery_id = d.id
+		) lat ON TRUE
+		%s
+		ORDER BY d.updated_at DESC
+		LIMIT $1 OFFSET $2`, where)
+
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list permanently failed: %w", err)
+	}
+	defer rows.Close()
+
+	var out []domain.DLQEntry
+	for rows.Next() {
+		var e domain.DLQEntry
+		if err := rows.Scan(&e.DeliveryID, &e.EventID, &e.EndpointID, &e.TenantID, &e.AttemptCount, &e.FailedAt); err != nil {
+			return nil, fmt.Errorf("scan dlq entry: %w", err)
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }
 
 // ResurrectExpiredLeases resets in_flight deliveries whose lease has expired
