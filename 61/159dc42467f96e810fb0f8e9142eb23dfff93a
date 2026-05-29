@@ -1,0 +1,19 @@
+specs/004-test-architecture/spec.md
+  s_97c8529d6f319c::t_89b314e69aa125 1-235
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "61159dc42467f96e810fb0f8e9142eb23dfff93a",
+  "prompts": {},
+  "sessions": {
+    "s_97c8529d6f319c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "abadf210-6bd8-4da4-a377-af91455d62c5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
