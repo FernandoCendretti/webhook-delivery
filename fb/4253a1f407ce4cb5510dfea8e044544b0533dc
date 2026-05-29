@@ -1,0 +1,28 @@
+docs/api-reference.md
+  s_aab72e8c3e1bb4::t_b825e6882c7fe2 114
+  s_aab72e8c3e1bb4::t_5721c1b1730f9b 172,177
+  s_aab72e8c3e1bb4::t_78211e8d86396a 204,207-208
+  s_aab72e8c3e1bb4::t_b3b1226b922bb1 253-308
+  s_aab72e8c3e1bb4::t_a8404a0939b35e 7-62,67,73-74,78-79,86,98-100
+specs/003-order-circuit-breaker/tasks.md
+  s_aab72e8c3e1bb4::t_072db8f9b8681e 411,416-417
+  s_aab72e8c3e1bb4::t_a22530b85efda5 402
+tests/integration/e2e_003_test.go
+  s_aab72e8c3e1bb4::t_b6067c1d499be9 1-327
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "fb4253a1f407ce4cb5510dfea8e044544b0533dc",
+  "prompts": {},
+  "sessions": {
+    "s_aab72e8c3e1bb4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e50e32ba-3795-4452-a286-08dfd75005ac",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
