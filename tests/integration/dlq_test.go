@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -39,6 +40,7 @@ func setupDLQHandler(t *testing.T, pool *pgxpool.Pool) http.Handler {
 		store.NewDeliveryStore(pool),
 		store.NewEndpointStore(pool),
 		store.NewAttemptStore(pool),
+		store.NewTenantStore(pool),
 	)
 	s.RegisterDLQ(dlqSvc)
 	return s.Mux()
@@ -946,5 +948,164 @@ func TestDLQReplay_ChainAllowed(t *testing.T) {
 	if res2.StatusCode != http.StatusAccepted {
 		b, _ := io.ReadAll(res2.Body)
 		t.Fatalf("chained replay status: got %d, want 202; body=%s", res2.StatusCode, b)
+	}
+}
+
+// --- US4: POST /v1/dlq/replay (Bulk Replay) ---
+
+func TestDLQBulkReplay_HappyPathByEndpoint(t *testing.T) {
+	_, pool := setupAPI(t)
+	ctx := context.Background()
+
+	endpointID, _ := seedEndpoint(ctx, pool, "http://bulk-ep.dlq.example.com")
+	tenantID := uuid.MustParse(systemDefaultTenantID)
+	for i := 0; i < 3; i++ {
+		insertPermanentlyFailed(t, ctx, pool, endpointID, tenantID)
+	}
+
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	body := fmt.Sprintf(`{"endpoint_id":%q}`, endpointID)
+	res, err := http.Post(ts.URL+"/v1/dlq/replay", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST /v1/dlq/replay: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusAccepted {
+		b, _ := io.ReadAll(res.Body)
+		t.Fatalf("status: got %d, want 202; body=%s", res.StatusCode, b)
+	}
+
+	var resp struct {
+		Replayed int `json:"replayed"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Replayed != 3 {
+		t.Errorf("replayed: got %d, want 3", resp.Replayed)
+	}
+}
+
+func TestDLQBulkReplay_NoMatches(t *testing.T) {
+	_, pool := setupAPI(t)
+	ctx := context.Background()
+
+	endpointID, _ := seedEndpoint(ctx, pool, "http://bulk-empty.dlq.example.com")
+
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	body := fmt.Sprintf(`{"endpoint_id":%q}`, endpointID)
+	res, err := http.Post(ts.URL+"/v1/dlq/replay", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST /v1/dlq/replay: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusAccepted {
+		b, _ := io.ReadAll(res.Body)
+		t.Fatalf("status: got %d, want 202; body=%s", res.StatusCode, b)
+	}
+
+	var resp struct {
+		Replayed int `json:"replayed"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	if resp.Replayed != 0 {
+		t.Errorf("replayed: got %d, want 0", resp.Replayed)
+	}
+}
+
+func TestDLQBulkReplay_NoFilterBadRequest(t *testing.T) {
+	_, pool := setupAPI(t)
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	res, err := http.Post(ts.URL+"/v1/dlq/replay", "application/json", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("POST /v1/dlq/replay: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("status: got %d, want 400", res.StatusCode)
+	}
+}
+
+func TestDLQBulkReplay_NonExistentEndpointID(t *testing.T) {
+	_, pool := setupAPI(t)
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	body := fmt.Sprintf(`{"endpoint_id":%q}`, uuid.New())
+	res, err := http.Post(ts.URL+"/v1/dlq/replay", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST /v1/dlq/replay: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("status: got %d, want 422", res.StatusCode)
+	}
+}
+
+func TestDLQBulkReplay_NonExistentTenantID(t *testing.T) {
+	_, pool := setupAPI(t)
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	body := fmt.Sprintf(`{"tenant_id":%q}`, uuid.New())
+	res, err := http.Post(ts.URL+"/v1/dlq/replay", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST /v1/dlq/replay: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("status: got %d, want 422", res.StatusCode)
+	}
+}
+
+func TestDLQBulkReplay_SkipsNonTerminalReplay(t *testing.T) {
+	_, pool := setupAPI(t)
+	ctx := context.Background()
+
+	endpointID, _ := seedEndpoint(ctx, pool, "http://bulk-skip.dlq.example.com")
+	tenantID := uuid.MustParse(systemDefaultTenantID)
+	id1 := insertPermanentlyFailed(t, ctx, pool, endpointID, tenantID)
+	insertPermanentlyFailed(t, ctx, pool, endpointID, tenantID)
+	insertPermanentlyFailed(t, ctx, pool, endpointID, tenantID)
+
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	// Create a non-terminal replay for id1 so it gets skipped in the bulk replay.
+	res1, err := http.Post(replayURL(ts.URL, id1), "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST single replay: %v", err)
+	}
+	res1.Body.Close()
+	if res1.StatusCode != http.StatusAccepted {
+		t.Fatalf("single replay status: got %d, want 202", res1.StatusCode)
+	}
+
+	body := fmt.Sprintf(`{"endpoint_id":%q}`, endpointID)
+	res, err := http.Post(ts.URL+"/v1/dlq/replay", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST /v1/dlq/replay: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusAccepted {
+		b, _ := io.ReadAll(res.Body)
+		t.Fatalf("status: got %d, want 202; body=%s", res.StatusCode, b)
+	}
+
+	var resp struct {
+		Replayed int `json:"replayed"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	if resp.Replayed != 2 {
+		t.Errorf("replayed: got %d, want 2 (id1 skipped due to existing non-terminal replay)", resp.Replayed)
 	}
 }

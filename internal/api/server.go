@@ -92,6 +92,8 @@ func (s *Server) RegisterDLQ(svc service.DLQService) {
 	h := newDLQHandler(svc, s.cfg.Logger)
 	s.mux.HandleFunc("GET /v1/dlq", h.List)
 	s.mux.HandleFunc("GET /v1/dlq/{delivery_id}", h.Detail)
+	// Literal route must be registered before the wildcard pattern.
+	s.mux.HandleFunc("POST /v1/dlq/replay", h.BulkReplay)
 	s.mux.HandleFunc("POST /v1/dlq/{delivery_id}/replay", h.Replay)
 }
 

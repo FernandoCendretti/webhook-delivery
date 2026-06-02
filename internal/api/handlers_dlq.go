@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -137,6 +138,32 @@ func (h *dlqHandler) Detail(w http.ResponseWriter, r *http.Request) {
 		Attempts:     attempts,
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *dlqHandler) BulkReplay(w http.ResponseWriter, r *http.Request) {
+	var req BulkReplayRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
+		return
+	}
+	if req.TenantID == nil && req.EndpointID == nil {
+		writeError(w, http.StatusBadRequest, "missing_filter", "at least one of tenant_id or endpoint_id must be provided")
+		return
+	}
+
+	count, err := h.svc.BulkReplay(r.Context(), domain.DLQFilter{TenantID: req.TenantID, EndpointID: req.EndpointID})
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrUnprocessable):
+			writeError(w, http.StatusUnprocessableEntity, "unprocessable", err.Error())
+		default:
+			h.logger.ErrorContext(r.Context(), "dlq bulk replay", "err", err)
+			writeError(w, http.StatusInternalServerError, "internal_error", "unexpected error")
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, BulkReplayResponse{Replayed: count})
 }
 
 func (h *dlqHandler) Replay(w http.ResponseWriter, r *http.Request) {

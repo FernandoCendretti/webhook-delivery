@@ -29,6 +29,14 @@ type mockDLQDeliveryStore struct {
 	lastPage          int
 	lastLimit         int
 	createReplayCalls int
+	// BulkReplay support
+	listPermanentlyFailedIDsResult []uuid.UUID
+	listPermanentlyFailedIDsErr    error
+	hasNonTerminalReplayResult     bool
+	hasNonTerminalReplayErr        error
+	listPFIDsCalls                 int
+	hasNTRCalls                    int
+	createReplayCallsForIDs        []uuid.UUID
 }
 
 func (m *mockDLQDeliveryStore) ListPermanentlyFailed(_ context.Context, filter domain.DLQFilter, page, limit int) ([]domain.DLQEntry, error) {
@@ -46,9 +54,20 @@ func (m *mockDLQDeliveryStore) GetByID(_ context.Context, _ uuid.UUID) (*domain.
 	return m.getByIDDelivery, m.getByIDErr
 }
 
-func (m *mockDLQDeliveryStore) CreateReplay(_ context.Context, _, _, _ uuid.UUID) (*domain.Delivery, error) {
+func (m *mockDLQDeliveryStore) CreateReplay(_ context.Context, _, _, sourceID uuid.UUID) (*domain.Delivery, error) {
 	m.createReplayCalls++
+	m.createReplayCallsForIDs = append(m.createReplayCallsForIDs, sourceID)
 	return m.createReplayDelivery, m.createReplayErr
+}
+
+func (m *mockDLQDeliveryStore) ListPermanentlyFailedIDs(_ context.Context, _ domain.DLQFilter) ([]uuid.UUID, error) {
+	m.listPFIDsCalls++
+	return m.listPermanentlyFailedIDsResult, m.listPermanentlyFailedIDsErr
+}
+
+func (m *mockDLQDeliveryStore) HasNonTerminalReplay(_ context.Context, _ uuid.UUID) (bool, error) {
+	m.hasNTRCalls++
+	return m.hasNonTerminalReplayResult, m.hasNonTerminalReplayErr
 }
 
 type mockDLQEndpointStore struct {
@@ -71,13 +90,24 @@ func (m *mockDLQAttemptStore) ListByDelivery(_ context.Context, _ uuid.UUID) ([]
 	return m.attempts, m.err
 }
 
+type mockDLQTenantStore struct {
+	tenant *domain.Tenant
+}
+
+func (m *mockDLQTenantStore) GetByID(_ context.Context, _ uuid.UUID) (*domain.Tenant, error) {
+	if m.tenant == nil {
+		return nil, domain.ErrNotFound
+	}
+	return m.tenant, nil
+}
+
 func newTestDLQService(ds *mockDLQDeliveryStore) service.DLQService {
-	return service.NewDLQService(ds, &mockDLQEndpointStore{}, &mockDLQAttemptStore{})
+	return service.NewDLQService(ds, &mockDLQEndpointStore{}, &mockDLQAttemptStore{}, &mockDLQTenantStore{tenant: &domain.Tenant{ID: uuid.New()}})
 }
 
 func newTestDLQServiceWithAttempts(ds *mockDLQDeliveryStore, as *mockDLQAttemptStore) service.DLQService {
 	ep := &domain.Endpoint{ID: uuid.New(), TenantID: uuid.New()}
-	return service.NewDLQService(ds, &mockDLQEndpointStore{endpoint: ep}, as)
+	return service.NewDLQService(ds, &mockDLQEndpointStore{endpoint: ep}, as, &mockDLQTenantStore{tenant: &domain.Tenant{ID: uuid.New()}})
 }
 
 func TestDLQServiceList_EmptyResult(t *testing.T) {
@@ -244,7 +274,7 @@ func TestDLQServiceDetail_FailedAtIsMaxCompletedAt(t *testing.T) {
 // newReplayService builds a DLQService with the given delivery store and an
 // endpoint store that resolves (endpoint != nil) or is gone (endpoint == nil).
 func newReplayService(ds *mockDLQDeliveryStore, endpoint *domain.Endpoint) service.DLQService {
-	return service.NewDLQService(ds, &mockDLQEndpointStore{endpoint: endpoint}, &mockDLQAttemptStore{})
+	return service.NewDLQService(ds, &mockDLQEndpointStore{endpoint: endpoint}, &mockDLQAttemptStore{}, &mockDLQTenantStore{tenant: &domain.Tenant{ID: uuid.New()}})
 }
 
 func TestDLQServiceReplay_NotFound(t *testing.T) {
@@ -344,5 +374,133 @@ func TestDLQServiceReplay_HappyPath(t *testing.T) {
 	}
 	if ds.createReplayCalls != 1 {
 		t.Errorf("CreateReplay calls: got %d, want 1", ds.createReplayCalls)
+	}
+}
+
+// --- US4: DLQService.BulkReplay ---
+
+func newBulkReplayService(ds *mockDLQDeliveryStore, ep *domain.Endpoint, ts *mockDLQTenantStore) service.DLQService {
+	return service.NewDLQService(ds, &mockDLQEndpointStore{endpoint: ep}, &mockDLQAttemptStore{}, ts)
+}
+
+func TestDLQServiceBulkReplay_EmptyFilter(t *testing.T) {
+	ds := &mockDLQDeliveryStore{}
+	svc := newBulkReplayService(ds, &domain.Endpoint{ID: uuid.New()}, &mockDLQTenantStore{tenant: &domain.Tenant{ID: uuid.New()}})
+
+	_, err := svc.BulkReplay(context.Background(), domain.DLQFilter{})
+	if !errors.Is(err, domain.ErrUnprocessable) {
+		t.Fatalf("expected ErrUnprocessable for empty filter, got %v", err)
+	}
+	if ds.listPFIDsCalls != 0 {
+		t.Error("ListPermanentlyFailedIDs should not be called for empty filter")
+	}
+}
+
+func TestDLQServiceBulkReplay_EndpointNotFound(t *testing.T) {
+	ds := &mockDLQDeliveryStore{}
+	epID := uuid.New()
+	svc := newBulkReplayService(ds, nil, &mockDLQTenantStore{tenant: &domain.Tenant{ID: uuid.New()}})
+
+	filter := domain.DLQFilter{EndpointID: &epID}
+	_, err := svc.BulkReplay(context.Background(), filter)
+	if !errors.Is(err, domain.ErrUnprocessable) {
+		t.Fatalf("expected ErrUnprocessable for missing endpoint, got %v", err)
+	}
+	if ds.listPFIDsCalls != 0 {
+		t.Error("ListPermanentlyFailedIDs should not be called when endpoint is not found")
+	}
+}
+
+func TestDLQServiceBulkReplay_TenantNotFound(t *testing.T) {
+	ds := &mockDLQDeliveryStore{}
+	tenantID := uuid.New()
+	svc := newBulkReplayService(ds, &domain.Endpoint{ID: uuid.New()}, &mockDLQTenantStore{})
+
+	filter := domain.DLQFilter{TenantID: &tenantID}
+	_, err := svc.BulkReplay(context.Background(), filter)
+	if !errors.Is(err, domain.ErrUnprocessable) {
+		t.Fatalf("expected ErrUnprocessable for missing tenant, got %v", err)
+	}
+	if ds.listPFIDsCalls != 0 {
+		t.Error("ListPermanentlyFailedIDs should not be called when tenant is not found")
+	}
+}
+
+func TestDLQServiceBulkReplay_SkipsNonTerminalReplays(t *testing.T) {
+	id1 := uuid.New()
+	ds := &mockDLQDeliveryStore{
+		listPermanentlyFailedIDsResult: []uuid.UUID{id1},
+		hasNonTerminalReplayResult:     true,
+	}
+	epID := uuid.New()
+	svc := newBulkReplayService(ds, &domain.Endpoint{ID: epID}, &mockDLQTenantStore{tenant: &domain.Tenant{ID: uuid.New()}})
+
+	filter := domain.DLQFilter{EndpointID: &epID}
+	count, err := svc.BulkReplay(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("count: got %d, want 0 (all skipped due to non-terminal replay)", count)
+	}
+	if ds.createReplayCalls != 0 {
+		t.Errorf("CreateReplay should not be called when all have non-terminal replays; got %d calls", ds.createReplayCalls)
+	}
+}
+
+func TestDLQServiceBulkReplay_UniqueViolationIsSkip(t *testing.T) {
+	id1 := uuid.New()
+	ds := &mockDLQDeliveryStore{
+		listPermanentlyFailedIDsResult: []uuid.UUID{id1},
+		hasNonTerminalReplayResult:     false,
+		getByIDDelivery: &domain.Delivery{
+			ID:         id1,
+			EventID:    uuid.New(),
+			EndpointID: uuid.New(),
+			Status:     domain.StatusPermanentlyFailed,
+		},
+		createReplayErr: &pgconn.PgError{Code: "23505"},
+	}
+	epID := uuid.New()
+	svc := newBulkReplayService(ds, &domain.Endpoint{ID: epID}, &mockDLQTenantStore{tenant: &domain.Tenant{ID: uuid.New()}})
+
+	filter := domain.DLQFilter{EndpointID: &epID}
+	count, err := svc.BulkReplay(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("expected no error for 23505 (treated as skip), got %v", err)
+	}
+	if count != 0 {
+		t.Errorf("count: got %d, want 0 (23505 is a skip, not a success)", count)
+	}
+}
+
+func TestDLQServiceBulkReplay_HappyPath(t *testing.T) {
+	id1, id2, id3 := uuid.New(), uuid.New(), uuid.New()
+	delivery := &domain.Delivery{
+		ID:         uuid.New(),
+		EventID:    uuid.New(),
+		EndpointID: uuid.New(),
+		Status:     domain.StatusPermanentlyFailed,
+	}
+	newDelivery := &domain.Delivery{ID: uuid.New(), Status: domain.StatusScheduled}
+	ds := &mockDLQDeliveryStore{
+		listPermanentlyFailedIDsResult: []uuid.UUID{id1, id2, id3},
+		hasNonTerminalReplayResult:     false,
+		getByIDDelivery:                delivery,
+		createReplayDelivery:           newDelivery,
+	}
+	epID := uuid.New()
+	svc := newBulkReplayService(ds, &domain.Endpoint{ID: epID}, &mockDLQTenantStore{tenant: &domain.Tenant{ID: uuid.New()}})
+
+	filter := domain.DLQFilter{EndpointID: &epID}
+	count, err := svc.BulkReplay(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("count: got %d, want 3", count)
+	}
+	if ds.createReplayCalls != 3 {
+		t.Errorf("CreateReplay calls: got %d, want 3", ds.createReplayCalls)
 	}
 }

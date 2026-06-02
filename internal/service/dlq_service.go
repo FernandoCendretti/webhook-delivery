@@ -39,6 +39,8 @@ type dlqDeliveryStore interface {
 	GetPermanentlyFailed(ctx context.Context, id uuid.UUID) (*domain.Delivery, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Delivery, error)
 	CreateReplay(ctx context.Context, eventID, endpointID, sourceID uuid.UUID) (*domain.Delivery, error)
+	ListPermanentlyFailedIDs(ctx context.Context, filter domain.DLQFilter) ([]uuid.UUID, error)
+	HasNonTerminalReplay(ctx context.Context, sourceID uuid.UUID) (bool, error)
 }
 
 // dlqEndpointStore is the endpoint-store surface used by dlqService.
@@ -51,16 +53,22 @@ type dlqAttemptStore interface {
 	ListByDelivery(ctx context.Context, deliveryID uuid.UUID) ([]domain.Attempt, error)
 }
 
+// dlqTenantStore is the tenant-store surface used by dlqService for BulkReplay validation.
+type dlqTenantStore interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tenant, error)
+}
+
 // dlqService is the concrete implementation of DLQService.
 type dlqService struct {
 	deliveries dlqDeliveryStore
 	endpoints  dlqEndpointStore
 	attempts   dlqAttemptStore
+	tenants    dlqTenantStore
 }
 
 // NewDLQService constructs a dlqService backed by the given stores.
-func NewDLQService(deliveries dlqDeliveryStore, endpoints dlqEndpointStore, attempts dlqAttemptStore) DLQService {
-	return &dlqService{deliveries: deliveries, endpoints: endpoints, attempts: attempts}
+func NewDLQService(deliveries dlqDeliveryStore, endpoints dlqEndpointStore, attempts dlqAttemptStore, tenants dlqTenantStore) DLQService {
+	return &dlqService{deliveries: deliveries, endpoints: endpoints, attempts: attempts, tenants: tenants}
 }
 
 func (s *dlqService) List(ctx context.Context, filter domain.DLQFilter, page, limit int) ([]domain.DLQEntry, Pagination, error) {
@@ -151,7 +159,57 @@ func (s *dlqService) Replay(ctx context.Context, deliveryID uuid.UUID) (*domain.
 	return newDelivery, nil
 }
 
-func (s *dlqService) BulkReplay(_ context.Context, _ domain.DLQFilter) (int, error) {
-	panic("not implemented")
+func (s *dlqService) BulkReplay(ctx context.Context, filter domain.DLQFilter) (int, error) {
+	if filter.TenantID == nil && filter.EndpointID == nil {
+		return 0, fmt.Errorf("bulk replay requires at least one filter field: %w", domain.ErrUnprocessable)
+	}
+	if filter.TenantID != nil {
+		if _, err := s.tenants.GetByID(ctx, *filter.TenantID); err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return 0, fmt.Errorf("bulk replay: tenant %s not found: %w", *filter.TenantID, domain.ErrUnprocessable)
+			}
+			return 0, fmt.Errorf("bulk replay: get tenant: %w", err)
+		}
+	}
+	if filter.EndpointID != nil {
+		if _, err := s.endpoints.GetByID(ctx, *filter.EndpointID); err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return 0, fmt.Errorf("bulk replay: endpoint %s not found: %w", *filter.EndpointID, domain.ErrUnprocessable)
+			}
+			return 0, fmt.Errorf("bulk replay: get endpoint: %w", err)
+		}
+	}
+
+	ids, err := s.deliveries.ListPermanentlyFailedIDs(ctx, filter)
+	if err != nil {
+		return 0, fmt.Errorf("bulk replay: list IDs: %w", err)
+	}
+
+	var count int
+	for _, id := range ids {
+		skip, err := s.deliveries.HasNonTerminalReplay(ctx, id)
+		if err != nil {
+			return count, fmt.Errorf("bulk replay: check non-terminal replay for %s: %w", id, err)
+		}
+		if skip {
+			continue
+		}
+
+		delivery, err := s.deliveries.GetByID(ctx, id)
+		if err != nil {
+			continue // delivery may have changed since snapshot
+		}
+
+		_, err = s.deliveries.CreateReplay(ctx, delivery.EventID, delivery.EndpointID, id)
+		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				continue // concurrent replay claimed the slot; skip without aborting
+			}
+			return count, fmt.Errorf("bulk replay: create replay for %s: %w", id, err)
+		}
+		count++
+	}
+	return count, nil
 }
 

@@ -146,6 +146,17 @@ type ReplayResponse struct {
 	Status     string    `json:"status"`
 }
 
+// BulkReplayRequest is the body for POST /v1/dlq/replay.
+type BulkReplayRequest struct {
+	TenantID   *uuid.UUID `json:"tenant_id,omitempty"`
+	EndpointID *uuid.UUID `json:"endpoint_id,omitempty"`
+}
+
+// BulkReplayResponse is the body returned on 202 for POST /v1/dlq/replay.
+type BulkReplayResponse struct {
+	Replayed int `json:"replayed"`
+}
+
 // CircuitBreakerResponse is the body for GET /v1/endpoints/{id}/circuit-breaker.
 // SuspendedUntil is omitted unless state is "open". The internal half_open state
 // is rendered as "half-open" (hyphen) in the API.

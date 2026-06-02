@@ -269,7 +269,9 @@ func (s *DeliveryStore) GetByIDWithAttempts(ctx context.Context, id uuid.UUID) (
 // deliveries with status='permanently_failed', ordered by updated_at DESC.
 // The caller passes limit+1 to detect HasNext.
 func (s *DeliveryStore) ListPermanentlyFailed(ctx context.Context, filter domain.DLQFilter, page, limit int) ([]domain.DLQEntry, error) {
-	offset := (page - 1) * limit
+	// The service always passes real_limit+1 as limit for HasNext detection,
+	// so the page offset must be based on real_limit = limit-1.
+	offset := (page - 1) * (limit - 1)
 	args := []any{limit, offset}
 	where := "WHERE d.status = 'permanently_failed'"
 	if filter.TenantID != nil {
@@ -348,6 +350,54 @@ func (s *DeliveryStore) GetPermanentlyFailed(ctx context.Context, id uuid.UUID) 
 		return nil, fmt.Errorf("get permanently failed delivery: %w", err)
 	}
 	return &d, nil
+}
+
+// ListPermanentlyFailedIDs returns all delivery IDs with status='permanently_failed'
+// matching the optional filter fields. No pagination — snapshot semantics.
+func (s *DeliveryStore) ListPermanentlyFailedIDs(ctx context.Context, filter domain.DLQFilter) ([]uuid.UUID, error) {
+	where := "WHERE status = 'permanently_failed'"
+	var args []any
+	if filter.TenantID != nil {
+		args = append(args, *filter.TenantID)
+		where += fmt.Sprintf(" AND tenant_id = $%d", len(args))
+	}
+	if filter.EndpointID != nil {
+		args = append(args, *filter.EndpointID)
+		where += fmt.Sprintf(" AND endpoint_id = $%d", len(args))
+	}
+
+	q := fmt.Sprintf(`SELECT id FROM deliveries %s`, where)
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list permanently failed IDs: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]uuid.UUID, 0)
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan permanently failed ID: %w", err)
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// HasNonTerminalReplay returns true if the given delivery already has a replay
+// delivery in 'scheduled' or 'in_flight' status (i.e., a non-terminal replay).
+func (s *DeliveryStore) HasNonTerminalReplay(ctx context.Context, sourceID uuid.UUID) (bool, error) {
+	const q = `
+		SELECT EXISTS(
+			SELECT 1 FROM deliveries
+			WHERE source_delivery_id = $1
+			  AND status IN ('scheduled', 'in_flight')
+		)`
+	var exists bool
+	if err := s.pool.QueryRow(ctx, q, sourceID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("has non-terminal replay: %w", err)
+	}
+	return exists, nil
 }
 
 // ResurrectExpiredLeases resets in_flight deliveries whose lease has expired
