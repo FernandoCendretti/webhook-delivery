@@ -1,0 +1,40 @@
+tests/integration/pipeline_test.go
+  s_6a61ffe8d35a6b::t_f8b31cc5bc737b 106-109,111-124
+  s_6a61ffe8d35a6b::t_e5d0833f782132 125-128
+  s_6a61ffe8d35a6b::t_21bae080d1a3c9 158-167
+  s_6a61ffe8d35a6b::t_1c57f2710fa5a1 18
+  s_6a61ffe8d35a6b::t_c86242867d3630 102-105,110
+  s_6a61ffe8d35a6b::t_02616d338ddd90 20
+tests/integration/main_test.go
+  s_6a61ffe8d35a6b::t_5cd0bed7d3f461 1-26
+internal/queue/consumer.go
+  s_6a61ffe8d35a6b::t_07fb8a430dbebb 37-40,47
+  s_6a61ffe8d35a6b::t_ccc8d0829dd20c 42-46,48-50
+  s_6a61ffe8d35a6b::t_10ff1fc90689e7 14-18,20-23
+  s_6a61ffe8d35a6b::t_e8f6c977ee2d59 19
+  s_6a61ffe8d35a6b::t_2ff51fcec19edd 7
+tests/integration/helpers_test.go
+  s_6a61ffe8d35a6b::t_a3ed49af56a9e7 198-216
+  s_6a61ffe8d35a6b::t_6a622b1ff17e85 22
+  s_6a61ffe8d35a6b::t_5221bb6a645311 14,36-38
+  s_6a61ffe8d35a6b::t_07842008f262b2 62-64,66,102,104-105,107-114
+  s_6a61ffe8d35a6b::t_9bd963e1739103 127-130,147-148,181-192
+  s_6a61ffe8d35a6b::t_3e44f3b10a0783 165-168,170-171
+  s_6a61ffe8d35a6b::t_546f02301b13a3 169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "dc9264b48ce418ed376bf982669fd7c3b05d0de8",
+  "prompts": {},
+  "sessions": {
+    "s_6a61ffe8d35a6b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73e1a2d4-49fa-4bb0-ab3f-b1118819260f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
