@@ -116,13 +116,13 @@ return 200; call `POST /v1/dlq/{delivery_id}/replay`; verify new delivery reache
 
 > Write these tests FIRST; run them and confirm they FAIL before touching implementation.
 
-- [ ] T019 [US3] Write integration tests for `POST /v1/dlq/{delivery_id}/replay` in `tests/integration/dlq_test.go` covering: 202 happy path (new `delivery_id` returned, original still `permanently_failed`), **SC-002 latency** (with < 10 000 permanently-failed records in DB, assert response time < 500 ms), **SC-003** (assert new delivery eventually reaches `delivered` status after endpoint is healthy), 404 for non-existent delivery, **409 for existing delivery with status ≠ `permanently_failed`** [⚠️ CONFLICT: spec US3-AS3 expects 409; plan maps `GetPermanentlyFailed` miss to `ErrNotFound → 404` — resolve this discrepancy before implementing T022], 409 for concurrent duplicate replay (SC-005), 422 for deleted endpoint, replay of a replay (chain allowed, returns 202); tests must FAIL
-- [ ] T020 [US3] Write unit tests for `DLQService.Replay` in `internal/service/dlq_service_test.go`: `ErrNotFound` when delivery not found, `ErrUnprocessable` when endpoint gone, `ErrConflict` when `pgx.PgError` code `23505` is returned by store, happy path returns new delivery; tests must FAIL
+- [ ] T019 [US3] Write integration tests for `POST /v1/dlq/{delivery_id}/replay` in `tests/integration/dlq_test.go` covering: 202 happy path (new `delivery_id` returned, original still `permanently_failed`), **SC-002 latency** (with < 10 000 permanently-failed records in DB, assert response time < 500 ms), **SC-003** (assert new delivery eventually reaches `delivered` status after endpoint is healthy), 404 for non-existent delivery, **409 for existing delivery with status ≠ `permanently_failed`** (per spec US3-AS3), 409 for concurrent duplicate replay (SC-005), 422 for deleted endpoint, replay of a replay (chain allowed, returns 202); tests must FAIL
+- [ ] T020 [US3] Write unit tests for `DLQService.Replay` in `internal/service/dlq_service_test.go`: `ErrNotFound` when delivery not found, `ErrConflict` when delivery exists but status ≠ `permanently_failed` (US3-AS3), `ErrUnprocessable` when endpoint gone, `ErrConflict` when `pgx.PgError` code `23505` is returned by store, happy path returns new delivery; tests must FAIL
 
 ### Implementation for User Story 3
 
 - [ ] T021 [US3] Implement `DeliveryStore.CreateReplay(ctx, eventID, endpointID, sourceID uuid.UUID)` in `internal/store/delivery_store.go`: `INSERT INTO deliveries(…) VALUES(…, 'scheduled', 0, NOW(), sourceID)` where `source_delivery_id=sourceID`; caller handles `pgx.PgError` code `23505`; add to `DeliveryStore` interface (depends on T001, T004)
-- [ ] T022 [US3] Implement `DLQService.Replay` in `internal/service/dlq_service.go`: call `GetPermanentlyFailed` → `ErrNotFound`; call `EndpointStore.GetByID` → `ErrUnprocessable`; call `CreateReplay`; translate `23505` pgx error to `ErrConflict` (depends on T003, T005, T014, T021)
+- [ ] T022 [US3] Implement `DLQService.Replay` in `internal/service/dlq_service.go`: call `GetByID` → `ErrNotFound` only when the delivery does not exist; if it exists but status ≠ `permanently_failed` return `ErrConflict` (US3-AS3); call `EndpointStore.GetByID` → `ErrUnprocessable`; call `CreateReplay`; translate `23505` pgx error to `ErrConflict` (depends on T003, T005, T021; add `GetByID` to the `dlqDeliveryStore` interface)
 - [ ] T023 [P] [US3] Add `ReplayResponse` DTO type in `internal/api/dto.go`
 - [ ] T024 [US3] Implement `handleReplay` in `internal/api/handlers_dlq.go` (map `ErrNotFound` → 404, `ErrConflict` → 409, `ErrUnprocessable` → 422); register `POST /v1/dlq/{delivery_id}/replay` route in `internal/api/server.go` (depends on T022, T023)
 
@@ -165,9 +165,9 @@ call `POST /v1/dlq/replay` with `{"endpoint_id": "<id>"}`; verify response is
 
 - **Phase 1 (T001–T004)**: T001 first; then T002 `[P]` and T003 `[P]` in parallel (different files, no deps); then T004 sequentially after T002.
 - **Phase 2 (T005)**: Depends on Phase 1 completion.
-- **Phase 3–6 (US stories)**: All depend on Phase 2 completion; stories must be
-  implemented sequentially (US1 → US2 → US3 → US4) because Phase 5 depends on
-  `GetPermanentlyFailed` (T014) introduced in Phase 4.
+- **Phase 3–6 (US stories)**: All depend on Phase 2 completion. US3 uses the
+  pre-existing `GetByID` (not `GetPermanentlyFailed`), so it has no hard dependency on
+  US2; US4 reuses `CreateReplay` from US3.
 - **No separate unit-test phase**: unit test tasks are embedded in their story phase,
   before the matching service implementation task.
 
@@ -176,13 +176,14 @@ call `POST /v1/dlq/replay` with `{"endpoint_id": "<id>"}`; verify response is
 | Store method | Introduced | Also used by |
 |---|---|---|
 | `ListPermanentlyFailed` | T008 (US1) | — |
-| `GetPermanentlyFailed` | T014 (US2) | T022 (US3) |
+| `GetPermanentlyFailed` | T014 (US2) | — |
+| `GetByID` (pre-existing) | — | T022 (US3) |
 | `ListByDelivery` | T015 (US2) | — |
 | `CreateReplay` | T021 (US3) | T029 (US4) |
 | `ListPermanentlyFailedIDs` | T027 (US4) | — |
 | `HasNonTerminalReplay` | T028 (US4) | — |
 
-Phase 5 (US3) may not begin until T014 is complete (Phase 4 partial dependency).
+Phase 5 (US3) uses the pre-existing `GetByID`, so it no longer depends on T014.
 
 ### Within Each User Story
 

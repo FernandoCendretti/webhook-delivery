@@ -138,11 +138,12 @@ type Pagination struct {
 }
 ```
 
-Error contract: `Detail` and `Replay` return `domain.ErrNotFound` when the delivery does
-not exist or is not `permanently_failed`. `Replay` returns `domain.ErrConflict` (new
-sentinel) when a non-terminal replay already exists, and `domain.ErrUnprocessable` when
-the endpoint no longer exists. `BulkReplay` returns `domain.ErrUnprocessable` when a
-filter entity does not exist.
+Error contract: `Detail` returns `domain.ErrNotFound` when the delivery does not exist
+or is not `permanently_failed`. `Replay` returns `domain.ErrNotFound` only when the
+delivery does not exist, and `domain.ErrConflict` (new sentinel) when the delivery
+exists but is not `permanently_failed` (per spec US3-AS3) or when a non-terminal replay
+already exists; it returns `domain.ErrUnprocessable` when the endpoint no longer exists.
+`BulkReplay` returns `domain.ErrUnprocessable` when a filter entity does not exist.
 
 ### Data model
 
@@ -181,7 +182,7 @@ No existing columns are altered; migration is additive and backward-compatible.
 |---|---|
 | `DeliveryStore.ListPermanentlyFailed(ctx, filter, page, limit)` | SELECT from `deliveries` WHERE `status='permanently_failed'` + optional filters, ORDER BY `updated_at DESC`, LIMIT/OFFSET — used by the HTTP listing endpoint |
 | `DeliveryStore.ListPermanentlyFailedIDs(ctx, filter)` | `SELECT id FROM deliveries WHERE status='permanently_failed' [AND tenant_id=$x] [AND endpoint_id=$y]` — returns all matching IDs as a `[]uuid.UUID` snapshot; no LIMIT/OFFSET; used exclusively by BulkReplay to avoid mid-iteration drift |
-| `DeliveryStore.GetPermanentlyFailed(ctx, id)` | SELECT delivery WHERE `id=$1 AND status='permanently_failed'` |
+| `DeliveryStore.GetPermanentlyFailed(ctx, id)` | SELECT delivery WHERE `id=$1 AND status='permanently_failed'` — used by `Detail` (US2). Single `Replay` instead uses the existing `GetByID` to distinguish a missing delivery (404) from a wrong-status one (409) |
 | `DeliveryStore.HasNonTerminalReplay(ctx, sourceID)` | SELECT 1 WHERE `source_delivery_id=$1 AND status IN ('scheduled','in_flight')` — used only by the bulk flow as a pre-filter; single replay relies solely on the unique index conflict |
 | `DeliveryStore.CreateReplay(ctx, eventID, endpointID, sourceID)` | INSERT with `status='scheduled'`, `attempt_count=0`, `next_attempt_at=NOW()`, `in_flight_lease_until=NULL`, `source_delivery_id=sourceID`; leverages unique index to reject concurrent duplicates; callers must handle `pgx.PgError` code `23505` |
 | `AttemptStore.ListByDelivery(ctx, deliveryID)` | SELECT attempts WHERE `delivery_id=$1` ORDER BY `sequence ASC` |
@@ -285,8 +286,8 @@ null and no nullable guard is required.
 ```
 
 **Response 400**: `delivery_id` path parameter is not a valid UUID.  
-**Response 404**: delivery not found or not `permanently_failed`.  
-**Response 409**: a non-terminal replay already exists for this delivery.  
+**Response 404**: delivery does not exist.  
+**Response 409**: the delivery exists but is not `permanently_failed` (US3-AS3), or a non-terminal replay already exists for this delivery.  
 **Response 422**: endpoint referenced by the delivery no longer exists.
 
 ---
