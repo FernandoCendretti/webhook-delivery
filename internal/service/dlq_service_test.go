@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/FernandoCendretti/webhook-delivery/internal/domain"
 	"github.com/FernandoCendretti/webhook-delivery/internal/service"
@@ -17,10 +18,17 @@ type mockDLQDeliveryStore struct {
 	entries  []domain.DLQEntry
 	delivery *domain.Delivery
 	err      error
+	// GetByID behaviour (used by Replay)
+	getByIDDelivery *domain.Delivery
+	getByIDErr      error
+	// CreateReplay behaviour (used by Replay)
+	createReplayDelivery *domain.Delivery
+	createReplayErr      error
 	// recorded args
-	lastFilter domain.DLQFilter
-	lastPage   int
-	lastLimit  int
+	lastFilter        domain.DLQFilter
+	lastPage          int
+	lastLimit         int
+	createReplayCalls int
 }
 
 func (m *mockDLQDeliveryStore) ListPermanentlyFailed(_ context.Context, filter domain.DLQFilter, page, limit int) ([]domain.DLQEntry, error) {
@@ -32,6 +40,15 @@ func (m *mockDLQDeliveryStore) ListPermanentlyFailed(_ context.Context, filter d
 
 func (m *mockDLQDeliveryStore) GetPermanentlyFailed(_ context.Context, _ uuid.UUID) (*domain.Delivery, error) {
 	return m.delivery, m.err
+}
+
+func (m *mockDLQDeliveryStore) GetByID(_ context.Context, _ uuid.UUID) (*domain.Delivery, error) {
+	return m.getByIDDelivery, m.getByIDErr
+}
+
+func (m *mockDLQDeliveryStore) CreateReplay(_ context.Context, _, _, _ uuid.UUID) (*domain.Delivery, error) {
+	m.createReplayCalls++
+	return m.createReplayDelivery, m.createReplayErr
 }
 
 type mockDLQEndpointStore struct {
@@ -219,5 +236,113 @@ func TestDLQServiceDetail_FailedAtIsMaxCompletedAt(t *testing.T) {
 	}
 	if len(detail.Attempts) != 2 {
 		t.Errorf("Attempts len: got %d, want 2", len(detail.Attempts))
+	}
+}
+
+// --- US3: DLQService.Replay ---
+
+// newReplayService builds a DLQService with the given delivery store and an
+// endpoint store that resolves (endpoint != nil) or is gone (endpoint == nil).
+func newReplayService(ds *mockDLQDeliveryStore, endpoint *domain.Endpoint) service.DLQService {
+	return service.NewDLQService(ds, &mockDLQEndpointStore{endpoint: endpoint}, &mockDLQAttemptStore{})
+}
+
+func TestDLQServiceReplay_NotFound(t *testing.T) {
+	ds := &mockDLQDeliveryStore{getByIDErr: domain.ErrNotFound}
+	svc := newReplayService(ds, &domain.Endpoint{ID: uuid.New(), TenantID: uuid.New()})
+
+	_, err := svc.Replay(context.Background(), uuid.New())
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+	if ds.createReplayCalls != 0 {
+		t.Errorf("CreateReplay should not be called when delivery is missing")
+	}
+}
+
+func TestDLQServiceReplay_WrongStatusConflict(t *testing.T) {
+	ds := &mockDLQDeliveryStore{
+		getByIDDelivery: &domain.Delivery{
+			ID:         uuid.New(),
+			EventID:    uuid.New(),
+			EndpointID: uuid.New(),
+			Status:     domain.StatusScheduled,
+		},
+	}
+	svc := newReplayService(ds, &domain.Endpoint{ID: uuid.New(), TenantID: uuid.New()})
+
+	_, err := svc.Replay(context.Background(), uuid.New())
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("expected ErrConflict for non-permanently_failed delivery, got %v", err)
+	}
+	if ds.createReplayCalls != 0 {
+		t.Errorf("CreateReplay should not be called for wrong-status delivery")
+	}
+}
+
+func TestDLQServiceReplay_EndpointGoneUnprocessable(t *testing.T) {
+	ds := &mockDLQDeliveryStore{
+		getByIDDelivery: &domain.Delivery{
+			ID:         uuid.New(),
+			EventID:    uuid.New(),
+			EndpointID: uuid.New(),
+			Status:     domain.StatusPermanentlyFailed,
+		},
+	}
+	// endpoint == nil → endpoint store returns ErrNotFound.
+	svc := newReplayService(ds, nil)
+
+	_, err := svc.Replay(context.Background(), uuid.New())
+	if !errors.Is(err, domain.ErrUnprocessable) {
+		t.Fatalf("expected ErrUnprocessable for deleted endpoint, got %v", err)
+	}
+	if ds.createReplayCalls != 0 {
+		t.Errorf("CreateReplay should not be called when endpoint is gone")
+	}
+}
+
+func TestDLQServiceReplay_UniqueViolationConflict(t *testing.T) {
+	ds := &mockDLQDeliveryStore{
+		getByIDDelivery: &domain.Delivery{
+			ID:         uuid.New(),
+			EventID:    uuid.New(),
+			EndpointID: uuid.New(),
+			Status:     domain.StatusPermanentlyFailed,
+		},
+		createReplayErr: &pgconn.PgError{Code: "23505"},
+	}
+	svc := newReplayService(ds, &domain.Endpoint{ID: uuid.New(), TenantID: uuid.New()})
+
+	_, err := svc.Replay(context.Background(), uuid.New())
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("expected ErrConflict for 23505 unique violation, got %v", err)
+	}
+}
+
+func TestDLQServiceReplay_HappyPath(t *testing.T) {
+	newDelivery := &domain.Delivery{ID: uuid.New(), Status: domain.StatusScheduled}
+	ds := &mockDLQDeliveryStore{
+		getByIDDelivery: &domain.Delivery{
+			ID:         uuid.New(),
+			EventID:    uuid.New(),
+			EndpointID: uuid.New(),
+			Status:     domain.StatusPermanentlyFailed,
+		},
+		createReplayDelivery: newDelivery,
+	}
+	svc := newReplayService(ds, &domain.Endpoint{ID: uuid.New(), TenantID: uuid.New()})
+
+	got, err := svc.Replay(context.Background(), uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || got.ID != newDelivery.ID {
+		t.Errorf("returned delivery: got %v, want %v", got, newDelivery)
+	}
+	if got.Status != domain.StatusScheduled {
+		t.Errorf("status: got %q, want scheduled", got.Status)
+	}
+	if ds.createReplayCalls != 1 {
+		t.Errorf("CreateReplay calls: got %d, want 1", ds.createReplayCalls)
 	}
 }

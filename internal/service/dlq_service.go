@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/FernandoCendretti/webhook-delivery/internal/domain"
 )
@@ -35,6 +37,8 @@ type DLQService interface {
 type dlqDeliveryStore interface {
 	ListPermanentlyFailed(ctx context.Context, filter domain.DLQFilter, page, limit int) ([]domain.DLQEntry, error)
 	GetPermanentlyFailed(ctx context.Context, id uuid.UUID) (*domain.Delivery, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.Delivery, error)
+	CreateReplay(ctx context.Context, eventID, endpointID, sourceID uuid.UUID) (*domain.Delivery, error)
 }
 
 // dlqEndpointStore is the endpoint-store surface used by dlqService.
@@ -116,8 +120,35 @@ func (s *dlqService) Detail(ctx context.Context, deliveryID uuid.UUID) (*DLQDeta
 	}, nil
 }
 
-func (s *dlqService) Replay(_ context.Context, _ uuid.UUID) (*domain.Delivery, error) {
-	panic("not implemented")
+func (s *dlqService) Replay(ctx context.Context, deliveryID uuid.UUID) (*domain.Delivery, error) {
+	// Use the generic GetByID so we can distinguish a missing delivery (404)
+	// from one that exists but is not permanently_failed (409).
+	delivery, err := s.deliveries.GetByID(ctx, deliveryID)
+	if err != nil {
+		return nil, err // domain.ErrNotFound propagates to a 404
+	}
+	if delivery.Status != domain.StatusPermanentlyFailed {
+		return nil, fmt.Errorf("replay delivery %s: status is %s: %w", deliveryID, delivery.Status, domain.ErrConflict)
+	}
+
+	if _, err := s.endpoints.GetByID(ctx, delivery.EndpointID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, fmt.Errorf("replay delivery %s: endpoint %s no longer exists: %w", deliveryID, delivery.EndpointID, domain.ErrUnprocessable)
+		}
+		return nil, fmt.Errorf("get endpoint for replay: %w", err)
+	}
+
+	newDelivery, err := s.deliveries.CreateReplay(ctx, delivery.EventID, delivery.EndpointID, delivery.ID)
+	if err != nil {
+		// A unique-violation on idx_deliveries_one_active_replay means a
+		// non-terminal replay already exists for this delivery (SC-005).
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, fmt.Errorf("replay delivery %s: a non-terminal replay already exists: %w", deliveryID, domain.ErrConflict)
+		}
+		return nil, fmt.Errorf("create replay for delivery %s: %w", deliveryID, err)
+	}
+	return newDelivery, nil
 }
 
 func (s *dlqService) BulkReplay(_ context.Context, _ domain.DLQFilter) (int, error) {

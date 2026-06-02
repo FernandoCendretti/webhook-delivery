@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/FernandoCendretti/webhook-delivery/internal/api"
+	"github.com/FernandoCendretti/webhook-delivery/internal/domain"
 	"github.com/FernandoCendretti/webhook-delivery/internal/service"
 	"github.com/FernandoCendretti/webhook-delivery/internal/store"
 )
@@ -578,5 +580,371 @@ func TestDLQList_SC004_Performance(t *testing.T) {
 	}
 	if elapsed >= time.Second {
 		t.Errorf("SC-004: first page took %v, want < 1s", elapsed)
+	}
+}
+
+// --- US3: POST /v1/dlq/{delivery_id}/replay ---
+
+// replayURL builds the replay endpoint URL for a delivery.
+func replayURL(base string, deliveryID uuid.UUID) string {
+	return fmt.Sprintf("%s/v1/dlq/%s/replay", base, deliveryID)
+}
+
+// insertPermanentlyFailedOrphanEndpoint seeds a permanently_failed delivery whose
+// endpoint_id references a non-existent endpoint. Because deliveries.endpoint_id
+// has a foreign key to endpoints, the insert temporarily disables the table's
+// triggers (which include the FK constraint check) inside a single transaction.
+func insertPermanentlyFailedOrphanEndpoint(t *testing.T, ctx context.Context, pool *pgxpool.Pool, tenantID uuid.UUID) uuid.UUID {
+	t.Helper()
+	// A real endpoint + event satisfies the events.endpoint_id FK; the delivery
+	// then points at a different, non-existent endpoint id.
+	realEP, err := seedEndpoint(ctx, pool, "http://orphan-real.dlq.example.com")
+	if err != nil {
+		t.Fatalf("seedEndpoint: %v", err)
+	}
+	evtID := uuid.New()
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO events (id, endpoint_id, tenant_id, payload) VALUES ($1, $2, $3, '{}') RETURNING id`,
+		evtID, realEP, tenantID).Scan(&evtID); err != nil {
+		t.Fatalf("insert event: %v", err)
+	}
+	missingEP := uuid.New()
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `ALTER TABLE deliveries DISABLE TRIGGER ALL`); err != nil {
+		t.Fatalf("disable triggers: %v", err)
+	}
+	var id uuid.UUID
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO deliveries (event_id, endpoint_id, tenant_id, status, attempt_count, next_attempt_at)
+		 VALUES ($1, $2, $3, 'permanently_failed', 3, NOW()) RETURNING id`,
+		evtID, missingEP, tenantID).Scan(&id); err != nil {
+		t.Fatalf("insert orphan delivery: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `ALTER TABLE deliveries ENABLE TRIGGER ALL`); err != nil {
+		t.Fatalf("enable triggers: %v", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit tx: %v", err)
+	}
+	return id
+}
+
+func TestDLQReplay_HappyPath(t *testing.T) {
+	_, pool := setupAPI(t)
+	ctx := context.Background()
+
+	endpointID, _ := seedEndpoint(ctx, pool, "http://replay-happy.dlq.example.com")
+	tenantID := uuid.MustParse(systemDefaultTenantID)
+	deliveryID := insertPermanentlyFailed(t, ctx, pool, endpointID, tenantID)
+
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	res, err := http.Post(replayURL(ts.URL, deliveryID), "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST replay: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusAccepted {
+		b, _ := io.ReadAll(res.Body)
+		t.Fatalf("status: got %d, want 202; body=%s", res.StatusCode, b)
+	}
+
+	var resp struct {
+		DeliveryID string `json:"delivery_id"`
+		Status     string `json:"status"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.DeliveryID == deliveryID.String() {
+		t.Error("replay must return a new delivery_id, got the original")
+	}
+	if resp.Status != "scheduled" {
+		t.Errorf("status: got %q, want scheduled", resp.Status)
+	}
+
+	// The original delivery must remain permanently_failed.
+	var origStatus string
+	if err := pool.QueryRow(ctx, `SELECT status FROM deliveries WHERE id = $1`, deliveryID).Scan(&origStatus); err != nil {
+		t.Fatalf("query original status: %v", err)
+	}
+	if origStatus != "permanently_failed" {
+		t.Errorf("original status: got %q, want permanently_failed", origStatus)
+	}
+
+	// The new delivery must reference the original via source_delivery_id.
+	newID := uuid.MustParse(resp.DeliveryID)
+	var src uuid.UUID
+	if err := pool.QueryRow(ctx, `SELECT source_delivery_id FROM deliveries WHERE id = $1`, newID).Scan(&src); err != nil {
+		t.Fatalf("query source_delivery_id: %v", err)
+	}
+	if src != deliveryID {
+		t.Errorf("source_delivery_id: got %s, want %s", src, deliveryID)
+	}
+}
+
+// TestDLQReplay_SC002_Latency asserts the replay responds in < 500 ms with a
+// non-trivial (< 10 000) number of permanently-failed records in the DB.
+func TestDLQReplay_SC002_Latency(t *testing.T) {
+	_, pool := setupAPI(t)
+	ctx := context.Background()
+
+	endpointID, _ := seedEndpoint(ctx, pool, "http://replay-latency.dlq.example.com")
+	tenantID := uuid.MustParse(systemDefaultTenantID)
+	for i := 0; i < 200; i++ {
+		insertPermanentlyFailed(t, ctx, pool, endpointID, tenantID)
+	}
+	target := insertPermanentlyFailed(t, ctx, pool, endpointID, tenantID)
+
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	start := time.Now()
+	res, err := http.Post(replayURL(ts.URL, target), "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST replay: %v", err)
+	}
+	defer res.Body.Close()
+	elapsed := time.Since(start)
+
+	if res.StatusCode != http.StatusAccepted {
+		b, _ := io.ReadAll(res.Body)
+		t.Fatalf("status: got %d, want 202; body=%s", res.StatusCode, b)
+	}
+	if elapsed >= 500*time.Millisecond {
+		t.Errorf("SC-002: replay took %v, want < 500ms", elapsed)
+	}
+}
+
+// TestDLQReplay_SC003_ReachesDelivered runs the full pipeline and verifies the
+// replayed delivery reaches 'delivered' against a healthy endpoint.
+func TestDLQReplay_SC003_ReachesDelivered(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	t.Cleanup(cancel)
+
+	_, pool := setupAPI(t)
+	brokers := testKafkaBrokers(t)
+
+	dst := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(dst.Close)
+
+	endpointID, _ := seedEndpoint(ctx, pool, dst.URL)
+	tenantID := uuid.MustParse(systemDefaultTenantID)
+	deliveryID := insertPermanentlyFailed(t, ctx, pool, endpointID, tenantID)
+
+	pipe := startPipeline(ctx, t, pool, brokers, 30)
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	res, err := http.Post(replayURL(ts.URL, deliveryID), "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST replay: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusAccepted {
+		b, _ := io.ReadAll(res.Body)
+		t.Fatalf("status: got %d, want 202; body=%s", res.StatusCode, b)
+	}
+	var resp struct {
+		DeliveryID string `json:"delivery_id"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	newID := uuid.MustParse(resp.DeliveryID)
+
+	if err := waitForDeliveryStatus(ctx, pipe.DS, newID, domain.StatusDelivered); err != nil {
+		t.Fatalf("SC-003: %v", err)
+	}
+}
+
+func TestDLQReplay_NotFound(t *testing.T) {
+	_, pool := setupAPI(t)
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	res, err := http.Post(replayURL(ts.URL, uuid.New()), "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST replay: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("status: got %d, want 404", res.StatusCode)
+	}
+}
+
+func TestDLQReplay_WrongStatusConflict(t *testing.T) {
+	_, pool := setupAPI(t)
+	ctx := context.Background()
+
+	endpointID, _ := seedEndpoint(ctx, pool, "http://replay-wrongstatus.dlq.example.com")
+	tenantID := uuid.MustParse(systemDefaultTenantID)
+
+	evtID := uuid.New()
+	pool.QueryRow(ctx, `INSERT INTO events (id, endpoint_id, tenant_id, payload) VALUES ($1, $2, $3, '{}') RETURNING id`,
+		evtID, endpointID, tenantID).Scan(&evtID)
+	var scheduledID uuid.UUID
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO deliveries (event_id, endpoint_id, tenant_id, status, attempt_count, next_attempt_at)
+		 VALUES ($1, $2, $3, 'scheduled', 0, NOW()) RETURNING id`,
+		evtID, endpointID, tenantID).Scan(&scheduledID); err != nil {
+		t.Fatalf("insert scheduled delivery: %v", err)
+	}
+
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	res, err := http.Post(replayURL(ts.URL, scheduledID), "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST replay: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusConflict {
+		t.Errorf("status: got %d, want 409", res.StatusCode)
+	}
+}
+
+// TestDLQReplay_ConcurrentDuplicateConflict (SC-005): two concurrent replays of
+// the same delivery yield exactly one 202 and one 409, and exactly one new
+// delivery is created.
+func TestDLQReplay_ConcurrentDuplicateConflict(t *testing.T) {
+	_, pool := setupAPI(t)
+	ctx := context.Background()
+
+	endpointID, _ := seedEndpoint(ctx, pool, "http://replay-concurrent.dlq.example.com")
+	tenantID := uuid.MustParse(systemDefaultTenantID)
+	deliveryID := insertPermanentlyFailed(t, ctx, pool, endpointID, tenantID)
+
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+	url := replayURL(ts.URL, deliveryID)
+
+	const n = 2
+	codes := make([]int, n)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			<-start
+			res, err := http.Post(url, "application/json", nil)
+			if err != nil {
+				codes[idx] = -1
+				return
+			}
+			res.Body.Close()
+			codes[idx] = res.StatusCode
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	var accepted, conflict int
+	for _, c := range codes {
+		switch c {
+		case http.StatusAccepted:
+			accepted++
+		case http.StatusConflict:
+			conflict++
+		}
+	}
+	if accepted != 1 || conflict != 1 {
+		t.Errorf("SC-005: got codes %v, want exactly one 202 and one 409", codes)
+	}
+
+	var created int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM deliveries WHERE source_delivery_id = $1`, deliveryID).Scan(&created); err != nil {
+		t.Fatalf("count replays: %v", err)
+	}
+	if created != 1 {
+		t.Errorf("SC-005: replay deliveries created: got %d, want 1", created)
+	}
+}
+
+// TestDLQReplay_DeletedEndpointUnprocessable (US3-AS5): replaying a delivery whose
+// endpoint no longer exists returns 422 and creates no new delivery.
+func TestDLQReplay_DeletedEndpointUnprocessable(t *testing.T) {
+	_, pool := setupAPI(t)
+	ctx := context.Background()
+	tenantID := uuid.MustParse(systemDefaultTenantID)
+
+	deliveryID := insertPermanentlyFailedOrphanEndpoint(t, ctx, pool, tenantID)
+
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	res, err := http.Post(replayURL(ts.URL, deliveryID), "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST replay: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("status: got %d, want 422", res.StatusCode)
+	}
+
+	var created int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM deliveries WHERE source_delivery_id = $1`, deliveryID).Scan(&created); err != nil {
+		t.Fatalf("count replays: %v", err)
+	}
+	if created != 0 {
+		t.Errorf("no replay should be created on 422; got %d", created)
+	}
+}
+
+// TestDLQReplay_ChainAllowed (US3-AS6): replaying a delivery that is itself a
+// replay returns 202.
+func TestDLQReplay_ChainAllowed(t *testing.T) {
+	_, pool := setupAPI(t)
+	ctx := context.Background()
+
+	endpointID, _ := seedEndpoint(ctx, pool, "http://replay-chain.dlq.example.com")
+	tenantID := uuid.MustParse(systemDefaultTenantID)
+	original := insertPermanentlyFailed(t, ctx, pool, endpointID, tenantID)
+
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	// First replay of the original.
+	res1, err := http.Post(replayURL(ts.URL, original), "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST first replay: %v", err)
+	}
+	defer res1.Body.Close()
+	if res1.StatusCode != http.StatusAccepted {
+		b, _ := io.ReadAll(res1.Body)
+		t.Fatalf("first replay status: got %d, want 202; body=%s", res1.StatusCode, b)
+	}
+	var first struct {
+		DeliveryID string `json:"delivery_id"`
+	}
+	json.NewDecoder(res1.Body).Decode(&first)
+	firstReplayID := uuid.MustParse(first.DeliveryID)
+
+	// Drive the first replay into permanently_failed (as if it had exhausted retries).
+	if _, err := pool.Exec(ctx,
+		`UPDATE deliveries SET status = 'permanently_failed', updated_at = NOW() WHERE id = $1`,
+		firstReplayID); err != nil {
+		t.Fatalf("mark first replay failed: %v", err)
+	}
+
+	// Replay the replay — chains are allowed.
+	res2, err := http.Post(replayURL(ts.URL, firstReplayID), "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST chained replay: %v", err)
+	}
+	defer res2.Body.Close()
+	if res2.StatusCode != http.StatusAccepted {
+		b, _ := io.ReadAll(res2.Body)
+		t.Fatalf("chained replay status: got %d, want 202; body=%s", res2.StatusCode, b)
 	}
 }

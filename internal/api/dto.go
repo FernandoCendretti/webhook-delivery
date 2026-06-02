@@ -139,6 +139,13 @@ type DLQDetailResponse struct {
 	Attempts     []AttemptResponse `json:"attempts"`
 }
 
+// ReplayResponse is the body for POST /v1/dlq/{delivery_id}/replay (202).
+// It carries the new delivery's id and its initial status ("scheduled").
+type ReplayResponse struct {
+	DeliveryID uuid.UUID `json:"delivery_id"`
+	Status     string    `json:"status"`
+}
+
 // CircuitBreakerResponse is the body for GET /v1/endpoints/{id}/circuit-breaker.
 // SuspendedUntil is omitted unless state is "open". The internal half_open state
 // is rendered as "half-open" (hyphen) in the API.

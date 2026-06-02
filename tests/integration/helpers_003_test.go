@@ -28,6 +28,7 @@ var allMigrations = []string{
 	"004_tenants.sql",
 	"005_tenant_columns.sql",
 	"006_circuit_breaker.sql",
+	"007_dlq_replay.sql",
 }
 
 // setup003Pool starts a Postgres testcontainer and applies all six migrations.

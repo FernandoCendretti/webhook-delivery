@@ -139,3 +139,33 @@ func (h *dlqHandler) Detail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (h *dlqHandler) Replay(w http.ResponseWriter, r *http.Request) {
+	rawID := r.PathValue("delivery_id")
+	id, err := uuid.Parse(rawID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_delivery_id", "delivery_id must be a valid UUID")
+		return
+	}
+
+	newDelivery, err := h.svc.Replay(r.Context(), id)
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			writeError(w, http.StatusNotFound, "not_found", "delivery not found")
+		case errors.Is(err, domain.ErrConflict):
+			writeError(w, http.StatusConflict, "conflict", "delivery is not permanently_failed or a non-terminal replay already exists")
+		case errors.Is(err, domain.ErrUnprocessable):
+			writeError(w, http.StatusUnprocessableEntity, "unprocessable", "the endpoint referenced by the delivery no longer exists")
+		default:
+			h.logger.ErrorContext(r.Context(), "dlq replay", "err", err)
+			writeError(w, http.StatusInternalServerError, "internal_error", "unexpected error")
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, ReplayResponse{
+		DeliveryID: newDelivery.ID,
+		Status:     string(newDelivery.Status),
+	})
+}
+

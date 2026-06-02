@@ -311,6 +311,28 @@ func (s *DeliveryStore) ListPermanentlyFailed(ctx context.Context, filter domain
 	return out, rows.Err()
 }
 
+// CreateReplay inserts a new 'scheduled' delivery for the same event and endpoint
+// as a permanently-failed delivery, referencing the original via source_delivery_id.
+// tenant_id is derived from the endpoint (consistent with how deliveries are
+// denormalised). The unique partial index idx_deliveries_one_active_replay rejects
+// a second non-terminal replay for the same source; the caller must inspect the
+// returned error for a pgx PgError with code 23505 to detect that conflict.
+func (s *DeliveryStore) CreateReplay(ctx context.Context, eventID, endpointID, sourceID uuid.UUID) (*domain.Delivery, error) {
+	const q = `
+		INSERT INTO deliveries (event_id, endpoint_id, tenant_id, status, attempt_count,
+		                        next_attempt_at, in_flight_lease_until, source_delivery_id)
+		VALUES ($1, $2, (SELECT tenant_id FROM endpoints WHERE id = $2),
+		        'scheduled', 0, NOW(), NULL, $3)
+		RETURNING id, event_id, endpoint_id, status::text, attempt_count,
+		          next_attempt_at, in_flight_lease_until, created_at, updated_at`
+	var d domain.Delivery
+	if err := scanDelivery(s.pool.QueryRow(ctx, q, eventID, endpointID, sourceID), &d); err != nil {
+		return nil, fmt.Errorf("create replay delivery: %w", err)
+	}
+	d.SourceDeliveryID = &sourceID
+	return &d, nil
+}
+
 // GetPermanentlyFailed returns the delivery with the given id only if its status
 // is 'permanently_failed'. Returns domain.ErrNotFound otherwise.
 func (s *DeliveryStore) GetPermanentlyFailed(ctx context.Context, id uuid.UUID) (*domain.Delivery, error) {
