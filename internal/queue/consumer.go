@@ -4,16 +4,23 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 )
 
 // ConsumerConfig holds the settings required to create a Kafka consumer.
 type ConsumerConfig struct {
-	Brokers []string
-	Topic   string
-	GroupID string
-	Logger  *slog.Logger
+	Brokers           []string
+	Topic             string
+	GroupID           string
+	Logger            *slog.Logger
+	SessionTimeout    time.Duration // 0 = kafka-go default (30 s)
+	HeartbeatInterval time.Duration // 0 = kafka-go default (3 s)
+	// StartOffset controls where a new consumer group starts reading.
+	// 0 means kafka.LastOffset (the default — skip messages published before joining).
+	// Set to kafka.FirstOffset (-2) to read from the beginning; useful in tests.
+	StartOffset int64
 }
 
 // Consumer wraps a kafka.Reader to provide manual-commit message consumption.
@@ -27,14 +34,20 @@ func NewConsumer(cfg ConsumerConfig) *Consumer {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
+	startOffset := kafka.LastOffset
+	if cfg.StartOffset != 0 {
+		startOffset = cfg.StartOffset
+	}
 	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:        cfg.Brokers,
-		Topic:          cfg.Topic,
-		GroupID:        cfg.GroupID,
-		MinBytes:       1,
-		MaxBytes:       10e6,
-		StartOffset:    kafka.LastOffset,
-		CommitInterval: 0,
+		Brokers:           cfg.Brokers,
+		Topic:             cfg.Topic,
+		GroupID:           cfg.GroupID,
+		MinBytes:          1,
+		MaxBytes:          10e6,
+		StartOffset:       startOffset,
+		CommitInterval:    0,
+		SessionTimeout:    cfg.SessionTimeout,
+		HeartbeatInterval: cfg.HeartbeatInterval,
 	})
 	return &Consumer{reader: r, logger: cfg.Logger}
 }

@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
+	"github.com/segmentio/kafka-go"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
@@ -30,6 +32,10 @@ import (
 	"github.com/FernandoCendretti/webhook-delivery/internal/service"
 	"github.com/FernandoCendretti/webhook-delivery/internal/store"
 )
+
+// sharedKafkaBroker holds the broker address of the single Kafka container
+// started by TestMain and shared across all tests in the package.
+var sharedKafkaBroker string
 
 // setupFullAPI builds an http.Handler with endpoints, events, deliveries, and
 // tenant routes wired. Requires all six migrations to be applied on pool.
@@ -53,15 +59,12 @@ func setupFullAPIWithPool(t *testing.T) (http.Handler, *pgxpool.Pool) {
 	return setupFullAPI(t, pool), pool
 }
 
-// testKafkaBrokers starts a Kafka testcontainer and returns broker addresses.
-func testKafkaBrokers(t *testing.T) []string {
-	t.Helper()
+// newKafkaContainer starts a Kafka testcontainer and returns its address and a
+// termination function. Used by TestMain to create the single shared container.
+func newKafkaContainer() (addr string, terminate func(), err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	t.Cleanup(cancel)
+	defer cancel()
 
-	// Bind container port 9092 to the same fixed host port so KAFKA_ADVERTISED_LISTENERS
-	// matches the address clients will actually reach. Tests are sequential (no
-	// t.Parallel()), so port 9092 is always free.
 	req := testcontainers.ContainerRequest{
 		Image:        "confluentinc/cp-kafka:7.6.0",
 		ExposedPorts: []string{"9092/tcp"},
@@ -96,11 +99,19 @@ func testKafkaBrokers(t *testing.T) []string {
 		Started:          true,
 	})
 	if err != nil {
-		t.Fatalf("start kafka container: %v", err)
+		return "", nil, fmt.Errorf("start kafka container: %w", err)
 	}
-	t.Cleanup(func() { _ = ctr.Terminate(context.Background()) })
+	return "localhost:9092", func() { _ = ctr.Terminate(context.Background()) }, nil
+}
 
-	return []string{"localhost:9092"}
+// testKafkaBrokers returns the address of the shared Kafka container started by
+// TestMain. Tests are sequential (no t.Parallel()), so a single broker is safe.
+func testKafkaBrokers(t *testing.T) []string {
+	t.Helper()
+	if sharedKafkaBroker == "" {
+		t.Fatal("sharedKafkaBroker not initialised — TestMain must start Kafka before tests run")
+	}
+	return []string{sharedKafkaBroker}
 }
 
 // testPipeline holds the running scheduler+worker and helper stores.
@@ -113,6 +124,10 @@ type testPipeline struct {
 // startPipeline launches an in-process scheduler (with reaper) and worker backed
 // by real Postgres + Kafka containers. The topic is unique per call to avoid
 // cross-test interference. leaseSeconds controls the in-flight lease duration.
+//
+// Cleanup order (LIFO): cons.Close unblocks the reader → pipeCancel stops
+// sched/reap goroutines → wg.Wait ensures all goroutines exit before the test
+// framework tears down the Kafka container.
 func startPipeline(
 	ctx context.Context,
 	t *testing.T,
@@ -129,7 +144,8 @@ func startPipeline(
 	eventSvc := service.NewEventService(pool, endpointSvc)
 
 	pub := queue.NewPublisher(queue.PublisherConfig{Brokers: brokers, Topic: topic})
-	t.Cleanup(func() { _ = pub.Close() })
+
+	pipeCtx, pipeCancel := context.WithCancel(ctx)
 
 	sched := scheduler.New(scheduler.Config{
 		DeliveryStore: ds,
@@ -138,22 +154,22 @@ func startPipeline(
 		LeaseDuration: time.Duration(leaseSeconds) * time.Second,
 		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
-	go func() { _ = sched.Run(ctx, 10*time.Millisecond) }()
 
 	reap := recovery.New(recovery.Config{
 		Store:    ds,
 		Interval: time.Duration(leaseSeconds/2+1) * time.Second,
 		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
-	go func() { _ = reap.Run(ctx) }()
 
 	cons := queue.NewConsumer(queue.ConsumerConfig{
-		Brokers: brokers,
-		Topic:   topic,
-		GroupID: "test-wkr-" + uuid.NewString()[:8],
-		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Brokers:           brokers,
+		Topic:             topic,
+		GroupID:           "test-wkr-" + uuid.NewString()[:8],
+		Logger:            slog.New(slog.NewTextHandler(io.Discard, nil)),
+		StartOffset:       kafka.FirstOffset,
+		SessionTimeout:    6 * time.Second,
+		HeartbeatInterval: 2 * time.Second,
 	})
-	t.Cleanup(func() { _ = cons.Close() })
 
 	w := delivery.NewWorker(delivery.WorkerConfig{
 		DeliveryStore: ds,
@@ -162,9 +178,40 @@ func startPipeline(
 		Pool:          pool,
 		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
-	go func() { _ = w.Run(ctx) }()
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() { defer wg.Done(); _ = sched.Run(pipeCtx, 10*time.Millisecond) }()
+	go func() { defer wg.Done(); _ = reap.Run(pipeCtx) }()
+	go func() { defer wg.Done(); _ = w.Run(pipeCtx) }()
+
+	t.Cleanup(func() {
+		_ = cons.Close() // unblocks FetchMessage so the worker goroutine can exit
+		pipeCancel()     // signals sched and reap goroutines to stop
+		wg.Wait()        // waits for all three goroutines to finish
+		_ = pub.Close()  // safe to close publisher after goroutines are done
+	})
 
 	return &testPipeline{DS: ds, AS: as, EventSvc: eventSvc}
+}
+
+// waitForTopic polls until the given Kafka topic has a leader or ctx expires.
+// It retries every 500 ms for up to 10 attempts to handle the window between
+// publisher creation and the broker making the topic available.
+func waitForTopic(ctx context.Context, brokers []string, topic string) error {
+	for i := 0; i < 10; i++ {
+		conn, err := kafka.DialLeader(ctx, "tcp", brokers[0], topic, 0)
+		if err == nil {
+			_ = conn.Close()
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+	return fmt.Errorf("topic %q not ready after retries", topic)
 }
 
 // waitForDeliveryStatus polls until the delivery reaches want or ctx expires.

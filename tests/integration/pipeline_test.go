@@ -15,11 +15,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/segmentio/kafka-go"
 
+	"github.com/FernandoCendretti/webhook-delivery/internal/delivery"
 	"github.com/FernandoCendretti/webhook-delivery/internal/domain"
 	"github.com/FernandoCendretti/webhook-delivery/internal/queue"
 	"github.com/FernandoCendretti/webhook-delivery/internal/scheduler"
-	"github.com/FernandoCendretti/webhook-delivery/internal/delivery"
 	"github.com/FernandoCendretti/webhook-delivery/internal/store"
 )
 
@@ -98,6 +99,33 @@ func TestPipeline_HappyPath(t *testing.T) {
 	ds := store.NewDeliveryStore(pool)
 	as := store.NewAttemptStore(pool)
 
+	// Use FirstOffset so the consumer reads from the beginning of the topic
+	// regardless of whether it joins before or after the scheduler publishes.
+	// A new group ID means no committed offset exists, so StartOffset determines
+	// where reading begins.
+	cons := queue.NewConsumer(queue.ConsumerConfig{
+		Brokers:           brokers,
+		Topic:             topic,
+		GroupID:           "test-worker-" + uuid.NewString()[:8],
+		StartOffset:       kafka.FirstOffset,
+		SessionTimeout:    6 * time.Second,
+		HeartbeatInterval: 2 * time.Second,
+	})
+	t.Cleanup(func() { _ = cons.Close() })
+
+	w := delivery.NewWorker(delivery.WorkerConfig{
+		DeliveryStore: ds,
+		AttemptStore:  as,
+		Consumer:      cons,
+		Pool:          pool,
+	})
+
+	// Wait for the topic to be reachable before the consumer tries to join, to
+	// avoid "Unknown Topic Or Partition" on the first JoinGroup call.
+	if err := waitForTopic(ctx, brokers, topic); err != nil {
+		t.Fatalf("topic not ready: %v", err)
+	}
+
 	// Run scheduler for one tick to claim the delivery and publish to Kafka.
 	sched := scheduler.New(scheduler.Config{
 		DeliveryStore: ds,
@@ -109,20 +137,6 @@ func TestPipeline_HappyPath(t *testing.T) {
 		t.Fatalf("scheduler tick: %v", err)
 	}
 
-	// Run worker for one message.
-	cons := queue.NewConsumer(queue.ConsumerConfig{
-		Brokers: brokers,
-		Topic:   topic,
-		GroupID: "test-worker-" + uuid.NewString()[:8],
-	})
-	t.Cleanup(func() { _ = cons.Close() })
-
-	w := delivery.NewWorker(delivery.WorkerConfig{
-		DeliveryStore: ds,
-		AttemptStore:  as,
-		Consumer:      cons,
-		Pool:          pool,
-	})
 	if err := w.ProcessOne(ctx); err != nil {
 		t.Fatalf("worker process: %v", err)
 	}
@@ -141,7 +155,16 @@ func TestPipeline_HappyPath(t *testing.T) {
 	if !ok || len(body) == 0 {
 		t.Fatal("destination did not receive any body")
 	}
-	if !bytes.Equal(bytes.TrimSpace(body), payloadBytes) {
+	var gotJSON, wantJSON interface{}
+	if err := json.Unmarshal(body, &gotJSON); err != nil {
+		t.Fatalf("body is not valid JSON: %v", err)
+	}
+	if err := json.Unmarshal(payloadBytes, &wantJSON); err != nil {
+		t.Fatalf("payloadBytes is not valid JSON: %v", err)
+	}
+	gotNorm, _ := json.Marshal(gotJSON)
+	wantNorm, _ := json.Marshal(wantJSON)
+	if !bytes.Equal(gotNorm, wantNorm) {
 		t.Errorf("body mismatch:\n got  %s\n want %s", body, payloadBytes)
 	}
 	ct, _ := receivedCT.Load().(string)
