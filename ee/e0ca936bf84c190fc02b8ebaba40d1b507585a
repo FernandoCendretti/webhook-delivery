@@ -1,0 +1,44 @@
+specs/004-dlq-replay/tasks.md
+  s_fc43ca9404cdac::t_75df4636709204 147-148
+  s_fc43ca9404cdac::t_d835efa213bb98 152-156
+internal/api/dto.go
+  s_fc43ca9404cdac::t_1829bbfc77007d 149-159
+internal/api/handlers_dlq.go
+  s_fc43ca9404cdac::t_5698a932dbbd08 145
+  s_fc43ca9404cdac::t_31574fb6a62afd 4
+  s_fc43ca9404cdac::t_69d51dd3e8c79a 143-144,146-168
+internal/service/dlq_service_test.go
+  s_fc43ca9404cdac::t_5b61b3eb36ecee 93-103,105,110
+  s_fc43ca9404cdac::t_dfb16ccec0a26f 277
+  s_fc43ca9404cdac::t_90f9f8a434fbcd 379-506
+  s_fc43ca9404cdac::t_e7464172b23a65 32-39
+  s_fc43ca9404cdac::t_a3b2651bf5d65c 57,59,63-70
+tests/integration/dlq_test.go
+  s_fc43ca9404cdac::t_ac1bc926c9a4db 953-1111
+  s_fc43ca9404cdac::t_25c92e8a8e8e63 43
+  s_fc43ca9404cdac::t_2dc5cc07f5bab9 14
+internal/store/delivery_store.go
+  s_fc43ca9404cdac::t_48c89acf8250b1 355-402
+  s_fc43ca9404cdac::t_9b8ceeb0a7bc21 272-274
+internal/service/dlq_service.go
+  s_fc43ca9404cdac::t_9475b11afc6676 42-43,56-60,66,70-71
+  s_fc43ca9404cdac::t_45242774c57c5c 162-213
+internal/api/server.go
+  s_fc43ca9404cdac::t_8c8b2c3d5f008d 95-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "eee0ca936bf84c190fc02b8ebaba40d1b507585a",
+  "prompts": {},
+  "sessions": {
+    "s_fc43ca9404cdac": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b44bd3d-54eb-4eb0-9bf9-d13349da49d3",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
