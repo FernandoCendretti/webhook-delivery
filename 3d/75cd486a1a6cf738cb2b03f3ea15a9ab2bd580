@@ -1,0 +1,27 @@
+specs/004-dlq-replay/plan.md
+  s_a0522d44235c2e::t_b102c8b371f6f8 185
+  s_a0522d44235c2e::t_5a7d473d7ee373 289-290
+  s_a0522d44235c2e::t_46cdd80e89ac69 141-146
+specs/004-dlq-replay/tasks.md
+  s_a0522d44235c2e::t_fbeab6ebe4c86e 120
+  s_a0522d44235c2e::t_25412498d3ad9d 125
+  s_a0522d44235c2e::t_d36a38ba4b2df6 179-180,186
+  s_a0522d44235c2e::t_1cce2ef1ae7c07 119
+  s_a0522d44235c2e::t_cc3a96477f5552 168-170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3d75cd486a1a6cf738cb2b03f3ea15a9ab2bd580",
+  "prompts": {},
+  "sessions": {
+    "s_a0522d44235c2e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ba9a665-797e-45b6-b406-923825ff048f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
