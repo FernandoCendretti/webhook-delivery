@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,6 +35,35 @@ func (s *AttemptStore) InsertStarted(ctx context.Context, deliveryID uuid.UUID, 
 		return uuid.Nil, err
 	}
 	return id, nil
+}
+
+// ListByDelivery returns all attempt records for the given delivery, ordered by
+// sequence ascending.
+func (s *AttemptStore) ListByDelivery(ctx context.Context, deliveryID uuid.UUID) ([]domain.Attempt, error) {
+	const q = `
+		SELECT id, delivery_id, sequence, started_at, completed_at,
+		       response_status_code, outcome::text, error_reason
+		FROM attempts WHERE delivery_id = $1 ORDER BY sequence ASC`
+	rows, err := s.pool.Query(ctx, q, deliveryID)
+	if err != nil {
+		return nil, fmt.Errorf("list attempts by delivery: %w", err)
+	}
+	defer rows.Close()
+
+	var out []domain.Attempt
+	for rows.Next() {
+		var a domain.Attempt
+		var outcome string
+		if err := rows.Scan(
+			&a.ID, &a.DeliveryID, &a.Sequence, &a.StartedAt, &a.CompletedAt,
+			&a.ResponseStatusCode, &outcome, &a.ErrorReason,
+		); err != nil {
+			return nil, fmt.Errorf("scan attempt: %w", err)
+		}
+		a.Outcome = domain.AttemptOutcome(outcome)
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }
 
 // UpdateOutcome finalises an attempt record after the HTTP call completes.

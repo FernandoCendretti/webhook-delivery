@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -33,6 +34,7 @@ type DLQService interface {
 // dlqDeliveryStore is the delivery-store surface used by dlqService.
 type dlqDeliveryStore interface {
 	ListPermanentlyFailed(ctx context.Context, filter domain.DLQFilter, page, limit int) ([]domain.DLQEntry, error)
+	GetPermanentlyFailed(ctx context.Context, id uuid.UUID) (*domain.Delivery, error)
 }
 
 // dlqEndpointStore is the endpoint-store surface used by dlqService.
@@ -41,7 +43,9 @@ type dlqEndpointStore interface {
 }
 
 // dlqAttemptStore is the attempt-store surface used by dlqService.
-type dlqAttemptStore interface{}
+type dlqAttemptStore interface {
+	ListByDelivery(ctx context.Context, deliveryID uuid.UUID) ([]domain.Attempt, error)
+}
 
 // dlqService is the concrete implementation of DLQService.
 type dlqService struct {
@@ -76,8 +80,40 @@ func (s *dlqService) List(ctx context.Context, filter domain.DLQFilter, page, li
 	return rows, Pagination{Page: page, Limit: limit, HasNext: hasNext}, nil
 }
 
-func (s *dlqService) Detail(_ context.Context, _ uuid.UUID) (*DLQDetail, error) {
-	panic("not implemented")
+func (s *dlqService) Detail(ctx context.Context, deliveryID uuid.UUID) (*DLQDetail, error) {
+	delivery, err := s.deliveries.GetPermanentlyFailed(ctx, deliveryID)
+	if err != nil {
+		return nil, err
+	}
+
+	endpoint, err := s.endpoints.GetByID(ctx, delivery.EndpointID)
+	if err != nil {
+		return nil, fmt.Errorf("get endpoint for dlq detail: %w", err)
+	}
+
+	attempts, err := s.attempts.ListByDelivery(ctx, deliveryID)
+	if err != nil {
+		return nil, fmt.Errorf("list attempts for dlq detail: %w", err)
+	}
+
+	var failedAt time.Time
+	for _, a := range attempts {
+		if a.CompletedAt != nil && a.CompletedAt.After(failedAt) {
+			failedAt = *a.CompletedAt
+		}
+	}
+
+	return &DLQDetail{
+		DLQEntry: domain.DLQEntry{
+			DeliveryID:   delivery.ID,
+			EventID:      delivery.EventID,
+			EndpointID:   delivery.EndpointID,
+			TenantID:     endpoint.TenantID,
+			AttemptCount: delivery.AttemptCount,
+			FailedAt:     failedAt,
+		},
+		Attempts: attempts,
+	}, nil
 }
 
 func (s *dlqService) Replay(_ context.Context, _ uuid.UUID) (*domain.Delivery, error) {

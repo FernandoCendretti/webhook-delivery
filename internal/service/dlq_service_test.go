@@ -14,8 +14,9 @@ import (
 
 // mockDLQDeliveryStore is a test double for dlqDeliveryStore.
 type mockDLQDeliveryStore struct {
-	entries []domain.DLQEntry
-	err     error
+	entries  []domain.DLQEntry
+	delivery *domain.Delivery
+	err      error
 	// recorded args
 	lastFilter domain.DLQFilter
 	lastPage   int
@@ -29,16 +30,37 @@ func (m *mockDLQDeliveryStore) ListPermanentlyFailed(_ context.Context, filter d
 	return m.entries, m.err
 }
 
-type mockDLQEndpointStore struct{}
-
-func (m *mockDLQEndpointStore) GetByID(_ context.Context, _ uuid.UUID) (*domain.Endpoint, error) {
-	return nil, domain.ErrNotFound
+func (m *mockDLQDeliveryStore) GetPermanentlyFailed(_ context.Context, _ uuid.UUID) (*domain.Delivery, error) {
+	return m.delivery, m.err
 }
 
-type mockDLQAttemptStore struct{}
+type mockDLQEndpointStore struct {
+	endpoint *domain.Endpoint
+}
+
+func (m *mockDLQEndpointStore) GetByID(_ context.Context, _ uuid.UUID) (*domain.Endpoint, error) {
+	if m.endpoint == nil {
+		return nil, domain.ErrNotFound
+	}
+	return m.endpoint, nil
+}
+
+type mockDLQAttemptStore struct {
+	attempts []domain.Attempt
+	err      error
+}
+
+func (m *mockDLQAttemptStore) ListByDelivery(_ context.Context, _ uuid.UUID) ([]domain.Attempt, error) {
+	return m.attempts, m.err
+}
 
 func newTestDLQService(ds *mockDLQDeliveryStore) service.DLQService {
 	return service.NewDLQService(ds, &mockDLQEndpointStore{}, &mockDLQAttemptStore{})
+}
+
+func newTestDLQServiceWithAttempts(ds *mockDLQDeliveryStore, as *mockDLQAttemptStore) service.DLQService {
+	ep := &domain.Endpoint{ID: uuid.New(), TenantID: uuid.New()}
+	return service.NewDLQService(ds, &mockDLQEndpointStore{endpoint: ep}, as)
 }
 
 func TestDLQServiceList_EmptyResult(t *testing.T) {
@@ -151,5 +173,51 @@ func TestDLQServiceList_StoreErrorPropagated(t *testing.T) {
 	_, _, err := svc.List(context.Background(), domain.DLQFilter{}, 1, 20)
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- US2: DLQService.Detail ---
+
+func TestDLQServiceDetail_NotFound(t *testing.T) {
+	ds := &mockDLQDeliveryStore{err: domain.ErrNotFound}
+	svc := newTestDLQService(ds)
+
+	_, err := svc.Detail(context.Background(), uuid.New())
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestDLQServiceDetail_FailedAtIsMaxCompletedAt(t *testing.T) {
+	deliveryID := uuid.New()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	earlier := now.Add(-5 * time.Minute)
+	later := now.Add(-1 * time.Minute)
+
+	ds := &mockDLQDeliveryStore{
+		delivery: &domain.Delivery{
+			ID:         deliveryID,
+			EventID:    uuid.New(),
+			EndpointID: uuid.New(),
+			Status:     domain.StatusPermanentlyFailed,
+		},
+	}
+	as := &mockDLQAttemptStore{
+		attempts: []domain.Attempt{
+			{Sequence: 1, CompletedAt: &earlier, Outcome: domain.OutcomeTransientFailure},
+			{Sequence: 2, CompletedAt: &later, Outcome: domain.OutcomePermanentFailure},
+		},
+	}
+	svc := newTestDLQServiceWithAttempts(ds, as)
+
+	detail, err := svc.Detail(context.Background(), deliveryID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !detail.FailedAt.Equal(later) {
+		t.Errorf("FailedAt: got %v, want %v", detail.FailedAt, later)
+	}
+	if len(detail.Attempts) != 2 {
+		t.Errorf("Attempts len: got %d, want 2", len(detail.Attempts))
 	}
 }

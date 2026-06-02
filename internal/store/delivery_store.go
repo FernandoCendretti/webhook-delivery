@@ -311,6 +311,23 @@ func (s *DeliveryStore) ListPermanentlyFailed(ctx context.Context, filter domain
 	return out, rows.Err()
 }
 
+// GetPermanentlyFailed returns the delivery with the given id only if its status
+// is 'permanently_failed'. Returns domain.ErrNotFound otherwise.
+func (s *DeliveryStore) GetPermanentlyFailed(ctx context.Context, id uuid.UUID) (*domain.Delivery, error) {
+	const q = `
+		SELECT id, event_id, endpoint_id, status::text, attempt_count,
+		       next_attempt_at, in_flight_lease_until, created_at, updated_at
+		FROM deliveries WHERE id = $1 AND status = 'permanently_failed'`
+	var d domain.Delivery
+	if err := scanDelivery(s.pool.QueryRow(ctx, q, id), &d); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get permanently failed delivery: %w", err)
+	}
+	return &d, nil
+}
+
 // ResurrectExpiredLeases resets in_flight deliveries whose lease has expired
 // back to scheduled, making them eligible for re-claim by the scheduler.
 // Returns the number of rows resurrected.

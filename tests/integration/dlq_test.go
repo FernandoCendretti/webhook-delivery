@@ -332,6 +332,216 @@ func TestDLQList_SC001_Freshness(t *testing.T) {
 	}
 }
 
+// --- US2: GET /v1/dlq/{delivery_id} ---
+
+// insertAttempt seeds an attempt record for a delivery directly in DB.
+func insertAttempt(t *testing.T, ctx context.Context, pool *pgxpool.Pool, deliveryID uuid.UUID, seq int, outcome string, statusCode *int) {
+	t.Helper()
+	_, err := pool.Exec(ctx,
+		`INSERT INTO attempts (delivery_id, sequence, started_at, completed_at, outcome, response_status_code)
+		 VALUES ($1, $2, NOW() - interval '10 seconds', NOW(), $3, $4)`,
+		deliveryID, seq, outcome, statusCode)
+	if err != nil {
+		t.Fatalf("insert attempt: %v", err)
+	}
+}
+
+func TestDLQDetail_HappyPath(t *testing.T) {
+	_, pool := setupAPI(t)
+	ctx := context.Background()
+
+	endpointID, _ := seedEndpoint(ctx, pool, "http://detail.dlq.example.com")
+	tenantID := uuid.MustParse(systemDefaultTenantID)
+	deliveryID := insertPermanentlyFailed(t, ctx, pool, endpointID, tenantID)
+
+	sc503 := 503
+	insertAttempt(t, ctx, pool, deliveryID, 1, "transient_failure", &sc503)
+	insertAttempt(t, ctx, pool, deliveryID, 2, "transient_failure", &sc503)
+	insertAttempt(t, ctx, pool, deliveryID, 3, "permanent_failure", &sc503)
+
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	res, err := http.Get(fmt.Sprintf("%s/v1/dlq/%s", ts.URL, deliveryID))
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(res.Body)
+		t.Fatalf("status: got %d, want 200; body=%s", res.StatusCode, b)
+	}
+
+	var resp struct {
+		DeliveryID   string `json:"delivery_id"`
+		EndpointID   string `json:"endpoint_id"`
+		TenantID     string `json:"tenant_id"`
+		AttemptCount int    `json:"attempt_count"`
+		FailedAt     string `json:"failed_at"`
+		Attempts     []struct {
+			Sequence           int    `json:"sequence"`
+			Outcome            string `json:"outcome"`
+			ResponseStatusCode *int   `json:"response_status_code"`
+		} `json:"attempts"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if resp.DeliveryID != deliveryID.String() {
+		t.Errorf("delivery_id: got %q, want %q", resp.DeliveryID, deliveryID)
+	}
+	if resp.EndpointID != endpointID.String() {
+		t.Errorf("endpoint_id: got %q, want %q", resp.EndpointID, endpointID)
+	}
+	if len(resp.Attempts) != 3 {
+		t.Fatalf("attempts len: got %d, want 3", len(resp.Attempts))
+	}
+	// Verify sorted by sequence ASC
+	for i, a := range resp.Attempts {
+		if a.Sequence != i+1 {
+			t.Errorf("attempt[%d].sequence: got %d, want %d", i, a.Sequence, i+1)
+		}
+	}
+	if resp.FailedAt == "" {
+		t.Error("failed_at must be present")
+	}
+}
+
+func TestDLQDetail_NotFound(t *testing.T) {
+	_, pool := setupAPI(t)
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	res, err := http.Get(fmt.Sprintf("%s/v1/dlq/%s", ts.URL, uuid.New()))
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("status: got %d, want 404", res.StatusCode)
+	}
+}
+
+func TestDLQDetail_WrongStatus(t *testing.T) {
+	_, pool := setupAPI(t)
+	ctx := context.Background()
+
+	endpointID, _ := seedEndpoint(ctx, pool, "http://wrongstatus.dlq.example.com")
+	tenantID := uuid.MustParse(systemDefaultTenantID)
+
+	// Insert a delivery with status 'scheduled' (not permanently_failed)
+	evtID := uuid.New()
+	pool.QueryRow(ctx, `INSERT INTO events (id, endpoint_id, tenant_id, payload) VALUES ($1, $2, $3, '{}') RETURNING id`,
+		evtID, endpointID, tenantID).Scan(&evtID)
+	var scheduledID uuid.UUID
+	pool.QueryRow(ctx,
+		`INSERT INTO deliveries (event_id, endpoint_id, tenant_id, status, attempt_count, next_attempt_at)
+		 VALUES ($1, $2, $3, 'scheduled', 0, NOW()) RETURNING id`,
+		evtID, endpointID, tenantID).Scan(&scheduledID)
+
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	res, err := http.Get(fmt.Sprintf("%s/v1/dlq/%s", ts.URL, scheduledID))
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("status: got %d, want 404", res.StatusCode)
+	}
+}
+
+func TestDLQDetail_HTTPErrorAttempt(t *testing.T) {
+	_, pool := setupAPI(t)
+	ctx := context.Background()
+
+	endpointID, _ := seedEndpoint(ctx, pool, "http://httperr.dlq.example.com")
+	tenantID := uuid.MustParse(systemDefaultTenantID)
+	deliveryID := insertPermanentlyFailed(t, ctx, pool, endpointID, tenantID)
+
+	sc503 := 503
+	insertAttempt(t, ctx, pool, deliveryID, 1, "transient_failure", &sc503)
+
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	res, err := http.Get(fmt.Sprintf("%s/v1/dlq/%s", ts.URL, deliveryID))
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer res.Body.Close()
+
+	var resp struct {
+		Attempts []struct {
+			Outcome            string `json:"outcome"`
+			ResponseStatusCode *int   `json:"response_status_code"`
+		} `json:"attempts"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	if len(resp.Attempts) != 1 {
+		t.Fatalf("attempts: got %d, want 1", len(resp.Attempts))
+	}
+	if resp.Attempts[0].ResponseStatusCode == nil || *resp.Attempts[0].ResponseStatusCode != 503 {
+		t.Errorf("response_status_code: got %v, want 503", resp.Attempts[0].ResponseStatusCode)
+	}
+}
+
+func TestDLQDetail_TimeoutAttempt(t *testing.T) {
+	_, pool := setupAPI(t)
+	ctx := context.Background()
+
+	endpointID, _ := seedEndpoint(ctx, pool, "http://timeout.dlq.example.com")
+	tenantID := uuid.MustParse(systemDefaultTenantID)
+	deliveryID := insertPermanentlyFailed(t, ctx, pool, endpointID, tenantID)
+
+	// timeout attempt: no response_status_code
+	insertAttempt(t, ctx, pool, deliveryID, 1, "timeout", nil)
+
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	res, err := http.Get(fmt.Sprintf("%s/v1/dlq/%s", ts.URL, deliveryID))
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer res.Body.Close()
+
+	var resp struct {
+		Attempts []struct {
+			Outcome            string `json:"outcome"`
+			ResponseStatusCode *int   `json:"response_status_code"`
+		} `json:"attempts"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	if len(resp.Attempts) != 1 {
+		t.Fatalf("attempts: got %d, want 1", len(resp.Attempts))
+	}
+	if resp.Attempts[0].Outcome != "timeout" {
+		t.Errorf("outcome: got %q, want timeout", resp.Attempts[0].Outcome)
+	}
+	if resp.Attempts[0].ResponseStatusCode != nil {
+		t.Errorf("response_status_code: got %v, want null", resp.Attempts[0].ResponseStatusCode)
+	}
+}
+
+func TestDLQDetail_InvalidUUID(t *testing.T) {
+	_, pool := setupAPI(t)
+	ts := httptest.NewServer(setupDLQHandler(t, pool))
+	t.Cleanup(ts.Close)
+
+	res, err := http.Get(ts.URL + "/v1/dlq/not-a-uuid")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("status: got %d, want 400", res.StatusCode)
+	}
+}
+
 // TestDLQList_SC004_Performance seeds 1000+ records and asserts first page < 1s.
 func TestDLQList_SC004_Performance(t *testing.T) {
 	_, pool := setupAPI(t)

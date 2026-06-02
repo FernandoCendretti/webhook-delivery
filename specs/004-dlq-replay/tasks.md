@@ -88,16 +88,16 @@ sorted by `sequence` ascending.
 
 > Write these tests FIRST; run them and confirm they FAIL before touching implementation.
 
-- [ ] T012 [US2] Write integration tests for `GET /v1/dlq/{delivery_id}` in `tests/integration/dlq_test.go` covering: happy path with attempt history sorted by sequence, 404 for non-existent ID, 404 for delivery with status ≠ `permanently_failed`, `response_status_code` present on HTTP-error attempt, timeout attempt has `outcome: "timeout"` and null `response_status_code`; tests must FAIL
-- [ ] T013 [US2] Write unit tests for `DLQService.Detail` in `internal/service/dlq_service_test.go`: `ErrNotFound` propagated when store returns not found, `FailedAt` equals `MAX(completed_at)` across the returned attempts; tests must FAIL
+- [x] T012 [US2] Write integration tests for `GET /v1/dlq/{delivery_id}` in `tests/integration/dlq_test.go` covering: happy path with attempt history sorted by sequence, 404 for non-existent ID, 404 for delivery with status ≠ `permanently_failed`, `response_status_code` present on HTTP-error attempt, timeout attempt has `outcome: "timeout"` and null `response_status_code`; tests must FAIL
+- [x] T013 [US2] Write unit tests for `DLQService.Detail` in `internal/service/dlq_service_test.go`: `ErrNotFound` propagated when store returns not found, `FailedAt` equals `MAX(completed_at)` across the returned attempts; tests must FAIL
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Implement `DeliveryStore.GetPermanentlyFailed(ctx, id uuid.UUID)` in `internal/store/delivery_store.go`: `SELECT … WHERE id=$1 AND status='permanently_failed'`; return `domain.ErrNotFound` when no row; add to `DeliveryStore` interface (depends on T001)
-- [ ] T015 [P] [US2] Implement `AttemptStore.ListByDelivery(ctx, deliveryID uuid.UUID)` in `internal/store/attempt_store.go`: `SELECT … FROM attempts WHERE delivery_id=$1 ORDER BY sequence ASC`; add to `AttemptStore` interface
-- [ ] T016 [US2] Implement `DLQService.Detail` in `internal/service/dlq_service.go`: call `GetPermanentlyFailed` (propagate `ErrNotFound`), call `ListByDelivery`, compute `FailedAt` as `MAX(completed_at)` from returned attempts, assemble `DLQDetail` (depends on T005, T014, T015)
-- [ ] T017 [P] [US2] Add `DLQDetailResponse` and `AttemptResponse` DTO types in `internal/api/dto.go`
-- [ ] T018 [US2] Implement `handleDLQDetail` in `internal/api/handlers_dlq.go` (parse UUID path param, map `ErrNotFound` → 404); register `GET /v1/dlq/{delivery_id}` route in `internal/api/server.go` (depends on T016, T017)
+- [x] T014 [US2] Implement `DeliveryStore.GetPermanentlyFailed(ctx, id uuid.UUID)` in `internal/store/delivery_store.go`: `SELECT … WHERE id=$1 AND status='permanently_failed'`; return `domain.ErrNotFound` when no row; add to `DeliveryStore` interface (depends on T001)
+- [x] T015 [P] [US2] Implement `AttemptStore.ListByDelivery(ctx, deliveryID uuid.UUID)` in `internal/store/attempt_store.go`: `SELECT … FROM attempts WHERE delivery_id=$1 ORDER BY sequence ASC`; add to `AttemptStore` interface
+- [x] T016 [US2] Implement `DLQService.Detail` in `internal/service/dlq_service.go`: call `GetPermanentlyFailed` (propagate `ErrNotFound`), call `ListByDelivery`, compute `FailedAt` as `MAX(completed_at)` from returned attempts, assemble `DLQDetail` (depends on T005, T014, T015)
+- [x] T017 [P] [US2] Add `DLQDetailResponse` and `AttemptResponse` DTO types in `internal/api/dto.go`
+- [x] T018 [US2] Implement `handleDLQDetail` in `internal/api/handlers_dlq.go` (parse UUID path param, map `ErrNotFound` → 404); register `GET /v1/dlq/{delivery_id}` route in `internal/api/server.go` (depends on T016, T017)
 
 **Checkpoint**: `go test ./tests/integration/ -run TestDLQDetail` and `go test ./internal/service/ -run TestDLQServiceDetail` both pass green.
 

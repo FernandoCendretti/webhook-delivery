@@ -128,6 +128,17 @@ type DLQListResponse struct {
 	Pagination PaginationResponse `json:"pagination"`
 }
 
+// DLQDetailResponse is the body for GET /v1/dlq/{delivery_id}.
+type DLQDetailResponse struct {
+	DeliveryID   uuid.UUID         `json:"delivery_id"`
+	EventID      uuid.UUID         `json:"event_id"`
+	EndpointID   uuid.UUID         `json:"endpoint_id"`
+	TenantID     uuid.UUID         `json:"tenant_id"`
+	AttemptCount int               `json:"attempt_count"`
+	FailedAt     time.Time         `json:"failed_at"`
+	Attempts     []AttemptResponse `json:"attempts"`
+}
+
 // CircuitBreakerResponse is the body for GET /v1/endpoints/{id}/circuit-breaker.
 // SuspendedUntil is omitted unless state is "open". The internal half_open state
 // is rendered as "half-open" (hyphen) in the API.

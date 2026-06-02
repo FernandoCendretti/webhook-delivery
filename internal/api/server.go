@@ -91,6 +91,7 @@ func (s *Server) RegisterDeliveries(svc deliveryGetter) {
 func (s *Server) RegisterDLQ(svc service.DLQService) {
 	h := newDLQHandler(svc, s.cfg.Logger)
 	s.mux.HandleFunc("GET /v1/dlq", h.List)
+	s.mux.HandleFunc("GET /v1/dlq/{delivery_id}", h.Detail)
 }
 
 // RegisterCircuitBreaker wires the GET /v1/endpoints/{id}/circuit-breaker route.

@@ -96,3 +96,46 @@ func (h *dlqHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (h *dlqHandler) Detail(w http.ResponseWriter, r *http.Request) {
+	rawID := r.PathValue("delivery_id")
+	id, err := uuid.Parse(rawID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_delivery_id", "delivery_id must be a valid UUID")
+		return
+	}
+
+	detail, err := h.svc.Detail(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "delivery not found")
+			return
+		}
+		h.logger.ErrorContext(r.Context(), "dlq detail", "err", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "unexpected error")
+		return
+	}
+
+	attempts := make([]AttemptResponse, len(detail.Attempts))
+	for i, a := range detail.Attempts {
+		attempts[i] = AttemptResponse{
+			Sequence:           a.Sequence,
+			StartedAt:          a.StartedAt,
+			CompletedAt:        a.CompletedAt,
+			Outcome:            string(a.Outcome),
+			ResponseStatusCode: a.ResponseStatusCode,
+			ErrorReason:        a.ErrorReason,
+		}
+	}
+
+	resp := DLQDetailResponse{
+		DeliveryID:   detail.DeliveryID,
+		EventID:      detail.EventID,
+		EndpointID:   detail.EndpointID,
+		TenantID:     detail.TenantID,
+		AttemptCount: detail.AttemptCount,
+		FailedAt:     detail.FailedAt,
+		Attempts:     attempts,
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
