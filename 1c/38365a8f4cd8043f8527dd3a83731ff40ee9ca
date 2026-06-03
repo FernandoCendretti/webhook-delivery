@@ -1,0 +1,23 @@
+specs/005-security-hardening/plan.md
+  s_9910c65007046a::t_666748bec35377 264-270
+  s_9910c65007046a::t_25c34d66d07272 81-92
+  s_9910c65007046a::t_4099ef45776c9d 181-186,188,190-205,208-210
+  s_9910c65007046a::t_36910b5c883bb7 285
+  s_9910c65007046a::t_7facedef81e34d 1-80,93-180,187,189,206-207,211-263,271-284,286-305
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1c38365a8f4cd8043f8527dd3a83731ff40ee9ca",
+  "prompts": {},
+  "sessions": {
+    "s_9910c65007046a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7aa478d8-883b-4d6f-bc87-1605f12fb606",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "lrcendretti_meli <luizfernando.rcendretti@mercadolivre.com>"
+    }
+  }
+}
