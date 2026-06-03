@@ -6,7 +6,7 @@
 # Feature Specification: Security Hardening
 
 **Created**: 2026-06-02
-**Status**: Draft
+**Status**: Approved
 **Input**: Static analysis findings from automated security tooling — 7 code-level issues and 18 CVEs in the Go standard library
 
 ## User Scenarios & Testing *(mandatory)*
